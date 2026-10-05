@@ -1,0 +1,342 @@
+namespace http_routing;
+
+// Transport-neutral, AOT-friendly HTTP route matching.
+//
+// The URI/HTTP layer owns parsing and normalization. This library receives a
+// canonical HTTP method plus path segments and resolves them to immutable
+// dispatch metadata. It never opens sockets, parses raw HTTP, or invokes a
+// handler closure.
+
+define class RouteSegment as
+  pub val String kind;
+  pub val String value;
+
+  pub static fnc literal(String value): RouteSegment {
+    return new RouteSegment("literal", value);
+  }
+
+  pub static fnc parameter(String name): RouteSegment {
+    return new RouteSegment("param", name);
+  }
+
+  pub is_literal(): bool {
+    return self.kind == "literal";
+  }
+
+  pub is_parameter(): bool {
+    return self.kind == "param";
+  }
+end
+
+define class RouteParam as
+  private val String name;
+  private val String value;
+  private val Option<RouteParam> next;
+
+  pub lookup(String target): Option<String> {
+    if self.name == target; then
+      return Some(self.value);
+    fi
+
+    if self.next.is_none(); then
+      return None;
+    fi
+
+    val RouteParam tail = self.next.unwrap();
+    return tail.lookup(target);
+  }
+end
+
+define class RouteParams as
+  private val Option<RouteParam> head;
+
+  pub static fnc empty(): RouteParams {
+    return new RouteParams(None);
+  }
+
+  pub insert(String name, String value): RouteParams {
+    val RouteParam node = new RouteParam(name, value, self.head);
+    return new RouteParams(Some(node));
+  }
+
+  pub get(String name): Option<String> {
+    if self.head.is_none(); then
+      return None;
+    fi
+
+    val RouteParam head = self.head.unwrap();
+    return head.lookup(name);
+  }
+end
+
+define class RouteMatch as
+  pub val int generation;
+  pub val String operation_key;
+  pub val String route_group_key;
+  pub val String middleware_chain_key;
+  private val RouteParams params;
+
+  pub param(String name): Option<String> {
+    return self.params.get(name);
+  }
+end
+
+define class Route as
+  pub val String method;
+  pub val List<RouteSegment> segments;
+  pub val String operation_key;
+  pub val String route_group_key;
+  pub val String middleware_chain_key;
+
+  // Parameter names do not affect the match shape:
+  // /users/:id and /users/:name are duplicate patterns.
+  pub same_pattern(Route other): bool {
+    if self.method != other.method; then
+      return false;
+    fi
+
+    let int left_count = 0;
+    for segment of self.segments do
+      left_count = left_count + 1;
+    done
+
+    let int right_count = 0;
+    for segment of other.segments do
+      right_count = right_count + 1;
+    done
+
+    if left_count != right_count; then
+      return false;
+    fi
+
+    let int left_index = 0;
+    for left of self.segments do
+      let int right_index = 0;
+      let bool found = false;
+      let bool equal = true;
+
+      for right of other.segments do
+        if left_index == right_index; then
+          found = true;
+
+          if left.kind != right.kind; then
+            equal = false;
+          fi
+
+          if left.is_literal(); then
+            if left.value != right.value; then
+              equal = false;
+            fi
+          fi
+        fi
+
+        right_index = right_index + 1;
+      done
+
+      if !found; then
+        return false;
+      fi
+      if !equal; then
+        return false;
+      fi
+
+      left_index = left_index + 1;
+    done
+
+    return true;
+  }
+end
+
+define class RouteSnapshot as
+  pub val int generation;
+  private val List<Route> routes;
+
+  pub resolve(String method, List<String> path_segments): Option<RouteMatch> {
+    for route of self.routes do
+      let bool method_matches = route.method == method;
+      if route.method == "*"; then
+        method_matches = true;
+      fi
+      if !method_matches; then
+        continue;
+      fi
+
+      let int route_count = 0;
+      for segment of route.segments do
+        route_count = route_count + 1;
+      done
+
+      let int path_count = 0;
+      for value of path_segments do
+        path_count = path_count + 1;
+      done
+
+      if route_count != path_count; then
+        continue;
+      fi
+
+      let bool matched = true;
+      let int route_index = 0;
+
+      for segment of route.segments do
+        let int path_index = 0;
+        let bool found = false;
+
+        for value of path_segments do
+          if route_index == path_index; then
+            found = true;
+
+            if segment.is_literal(); then
+              if segment.value != value; then
+                matched = false;
+              fi
+            fi
+          fi
+
+          path_index = path_index + 1;
+        done
+
+        if !found; then
+          matched = false;
+        fi
+        if !matched; then
+          break;
+        fi
+
+        route_index = route_index + 1;
+      done
+
+      if !matched; then
+        continue;
+      fi
+
+      let RouteParams params = RouteParams.empty();
+      let int capture_route_index = 0;
+
+      for segment of route.segments do
+        if segment.is_parameter(); then
+          let int capture_path_index = 0;
+
+          for value of path_segments do
+            if capture_route_index == capture_path_index; then
+              params = params.insert(segment.value, value);
+            fi
+
+            capture_path_index = capture_path_index + 1;
+          done
+        fi
+
+        capture_route_index = capture_route_index + 1;
+      done
+
+      return Some(new RouteMatch(
+        self.generation,
+        route.operation_key,
+        route.route_group_key,
+        route.middleware_chain_key,
+        params
+      ));
+    done
+
+    return None;
+  }
+end
+
+pub fnc literal_segment(String value): RouteSegment {
+  return RouteSegment.literal(value);
+}
+
+pub fnc param_segment(String name): RouteSegment {
+  return RouteSegment.parameter(name);
+}
+
+pub fnc route(
+  String method,
+  List<RouteSegment> segments,
+  String operation_key
+): Route {
+  return new Route(method, segments, operation_key, "", "");
+}
+
+pub fnc route_in_group(
+  String method,
+  List<RouteSegment> segments,
+  String operation_key,
+  String route_group_key,
+  String middleware_chain_key
+): Route {
+  return new Route(
+    method,
+    segments,
+    operation_key,
+    route_group_key,
+    middleware_chain_key
+  );
+}
+
+pub fnc build_snapshot(
+  int generation,
+  List<Route> routes
+): Result<RouteSnapshot, String> {
+  if generation < 0; then
+    return Err("route snapshot generation must be non-negative");
+  fi
+
+  let int route_index = 0;
+
+  for current of routes do
+    if current.method == ""; then
+      return Err("route method cannot be empty");
+    fi
+    if current.operation_key == ""; then
+      return Err("route operation_key cannot be empty");
+    fi
+
+    let int segment_index = 0;
+
+    for segment of current.segments do
+      if segment.kind != "literal"; then
+        if segment.kind != "param"; then
+          return Err("route segment kind must be literal or param");
+        fi
+      fi
+
+      if segment.value == ""; then
+        return Err("route segment value cannot be empty");
+      fi
+
+      if segment.is_parameter(); then
+        let int previous_index = 0;
+
+        for previous of current.segments do
+          if previous_index < segment_index; then
+            if previous.is_parameter(); then
+              if previous.value == segment.value; then
+                return Err("route parameter names must be unique within a route");
+              fi
+            fi
+          fi
+
+          previous_index = previous_index + 1;
+        done
+      fi
+
+      segment_index = segment_index + 1;
+    done
+
+    let int previous_route_index = 0;
+    for previous_route of routes do
+      if previous_route_index < route_index; then
+        if current.same_pattern(previous_route); then
+          return Err("duplicate route pattern for method " + current.method);
+        fi
+      fi
+
+      previous_route_index = previous_route_index + 1;
+    done
+
+    route_index = route_index + 1;
+  done
+
+  return Ok(new RouteSnapshot(generation, routes));
+}

@@ -1,0 +1,129 @@
+import class {RouteSegment, Route, RouteMatch, RouteSnapshot} from "../src/http_routing.ores";
+import fnc {literal_segment, param_segment, route, route_in_group, build_snapshot} from "../src/http_routing.ores";
+
+fnc require(bool condition, String message): void {
+  if !condition; then
+    None.expect(message);
+  fi
+  return;
+}
+
+pub routine main(): void {
+  val Result<RouteSnapshot, String> built = build_snapshot(
+    12,
+    arr[
+      route_in_group(
+        "GET",
+        arr[literal_segment("users"), literal_segment("me")],
+        "users.me",
+        "users",
+        "auth.required"
+      ),
+      route_in_group(
+        "GET",
+        arr[literal_segment("users"), param_segment("id")],
+        "users.show",
+        "users",
+        "auth.required"
+      ),
+      route(
+        "POST",
+        arr[literal_segment("users")],
+        "users.create"
+      ),
+      route(
+        "*",
+        arr[literal_segment("health")],
+        "health.check"
+      ),
+      route(
+        "GET",
+        arr[],
+        "root.show"
+      )
+    ]
+  );
+
+  val RouteSnapshot router = built.expect("router snapshot should build");
+
+  val RouteMatch static_match = router
+    .resolve("GET", arr["users", "me"])
+    .expect("static route should resolve");
+  require(static_match.operation_key == "users.me", "declaration order must remain deterministic");
+  require(static_match.generation == 12, "match must pin the route generation");
+  require(static_match.route_group_key == "users", "route group key must survive resolution");
+  require(static_match.middleware_chain_key == "auth.required", "middleware chain key must survive resolution");
+  require(static_match.param("id").is_none(), "literal route must not invent params");
+
+  val RouteMatch dynamic_match = router
+    .resolve("GET", arr["users", "42"])
+    .expect("parameter route should resolve");
+  require(dynamic_match.operation_key == "users.show", "parameter route operation mismatch");
+  require(dynamic_match.param("id").expect("id param missing") == "42", "parameter capture mismatch");
+
+  require(
+    router.resolve("DELETE", arr["users", "42"]).is_none(),
+    "method mismatch must not route"
+  );
+
+  val RouteMatch wildcard_method = router
+    .resolve("HEAD", arr["health"])
+    .expect("wildcard method route should resolve");
+  require(wildcard_method.operation_key == "health.check", "wildcard method operation mismatch");
+
+  val RouteMatch root = router
+    .resolve("GET", arr[])
+    .expect("root route should resolve");
+  require(root.operation_key == "root.show", "root route operation mismatch");
+
+  val Result<RouteSnapshot, String> duplicate = build_snapshot(
+    13,
+    arr[
+      route("GET", arr[literal_segment("dupe")], "dupe.first"),
+      route("GET", arr[literal_segment("dupe")], "dupe.second")
+    ]
+  );
+  require(duplicate.is_err(), "duplicate literal route patterns must be rejected");
+
+  val Result<RouteSnapshot, String> equivalent_params = build_snapshot(
+    14,
+    arr[
+      route("GET", arr[literal_segment("users"), param_segment("id")], "users.by_id"),
+      route("GET", arr[literal_segment("users"), param_segment("name")], "users.by_name")
+    ]
+  );
+  require(equivalent_params.is_err(), "parameter names must not make equivalent route patterns distinct");
+
+  val Result<RouteSnapshot, String> duplicate_param = build_snapshot(
+    15,
+    arr[
+      route(
+        "GET",
+        arr[param_segment("id"), param_segment("id")],
+        "bad.params"
+      )
+    ]
+  );
+  require(duplicate_param.is_err(), "duplicate parameter names must be rejected");
+
+  val Result<RouteSnapshot, String> invalid_segment = build_snapshot(
+    16,
+    arr[
+      route(
+        "GET",
+        arr[new RouteSegment("bogus", "x")],
+        "bad.segment"
+      )
+    ]
+  );
+  require(invalid_segment.is_err(), "unknown segment kinds must be rejected");
+
+  val Result<RouteSnapshot, String> invalid_generation = build_snapshot(
+    -1,
+    arr[route("GET", arr[literal_segment("x")], "x.show")]
+  );
+  require(invalid_generation.is_err(), "negative generations must be rejected");
+
+  stdio.stdout.println("ORES_ROUTING_TEST|PASS");
+  return;
+}

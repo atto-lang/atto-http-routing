@@ -1,0 +1,11 @@
+schema_version = "1"
+
+[project]
+name = "oreslang-http-routing"
+root = "."
+
+[source]
+roots = ["src", "tests"]
+
+[entrypoints]
+main = "tests/router_smoke.ores"
