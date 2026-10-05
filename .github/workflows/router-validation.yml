@@ -1,0 +1,37 @@
+name: router-validation
+
+on:
+  pull_request:
+  push:
+    branches: ["ci/router-validation-*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: router-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          version: '25.3'
+          java-version: '25'
+          distribution: 'graalvm'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: maven
+      - name: Audit routing boundary
+        run: bash scripts/audit.sh
+      - name: Build pinned Oreslang compiler mirror
+        run: mvn -B -ntp -q -e -f .ci/oreslang-source/pom.xml -DskipTests compile
+      - name: Typecheck routing smoke test
+        run: mvn -B -ntp -q -e -f .ci/oreslang-source/pom.xml -DskipTests exec:java -Dexec.args="--check $GITHUB_WORKSPACE/tests/router_smoke.ores"
+      - name: Execute routing smoke test
+        run: |
+          mvn -B -ntp -q -e -f .ci/oreslang-source/pom.xml -DskipTests exec:java -Dexec.args="$GITHUB_WORKSPACE/tests/router_smoke.ores" | tee /tmp/router.out
+          grep -F "ORES_ROUTING_TEST|PASS" /tmp/router.out
