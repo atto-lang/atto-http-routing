@@ -122,8 +122,8 @@ contract without changing the compiled router or match semantics.
   segments and 65,536 matcher steps).
 - Each endpoint is capped at 64 method targets to keep method dispatch and
   Allow synthesis bounded.
-- Foreign/out-of-range Decision values are rejected by capture/Allow helpers
-  rather than indexing another router's endpoint table.
+- Out-of-range or route-template-mismatched Decision values are rejected by
+  capture/Allow helpers rather than indexing an unrelated endpoint table.
 - Wildcards are terminal and captures are views over the existing RequestPath;
   matching does not allocate parameter maps.
 - The built routing table is detached from RouterBuilder mutations.
