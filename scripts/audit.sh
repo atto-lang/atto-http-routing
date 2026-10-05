@@ -16,8 +16,79 @@ if [[ "$module_count" != "1" ]]; then
   exit 65
 fi
 
-if grep -Eq '^[[:space:]]*define module http_routing[[:space:]]*$' "$source_file"; then
+if grep -Eq '^[[:space:]]*define module http_routing[[:space:]]*if ! awk '
+  /^[[:space:]]*define class[[:space:]]/ { in_class = 1; next }
+  in_class && /^[[:space:]]*end[[:space:]]*$/ { in_class = 0; next }
+  in_class && /->[[:space:]]*void/ {
+    print "class method uses non-preferred -> void syntax at line " NR ": " $0 > "/dev/stderr"
+    bad = 1
+  }
+  END { exit bad ? 1 : 0 }
+' "$source_file"; then
+  exit 65
+fi
+
+expected_ref="$(tr -d '[:space:]' < "$source_ref_file")"
+if [[ ! "$expected_ref" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "SOURCE_REF must contain exactly one lowercase 40-character git SHA" >&2
+  exit 65
+fi
+
+echo "router static audit: PASS"
+ "$source_file"; then
   echo "module declaration must include the 'as' keyword" >&2
+  exit 65
+fi
+
+# Every class declaration in this source uses the explicit 'as' body marker.
+if grep -En '^[[:space:]]*define[[:space:]]+class[[:space:]].*[^[:space:]][[:space:]]*if ! awk '
+  /^[[:space:]]*define class[[:space:]]/ { in_class = 1; next }
+  in_class && /^[[:space:]]*end[[:space:]]*$/ { in_class = 0; next }
+  in_class && /->[[:space:]]*void/ {
+    print "class method uses non-preferred -> void syntax at line " NR ": " $0 > "/dev/stderr"
+    bad = 1
+  }
+  END { exit bad ? 1 : 0 }
+' "$source_file"; then
+  exit 65
+fi
+
+expected_ref="$(tr -d '[:space:]' < "$source_ref_file")"
+if [[ ! "$expected_ref" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "SOURCE_REF must contain exactly one lowercase 40-character git SHA" >&2
+  exit 65
+fi
+
+echo "router static audit: PASS"
+ "$source_file" \
+    | grep -Ev '[[:space:]]as[[:space:]]*if ! awk '
+  /^[[:space:]]*define class[[:space:]]/ { in_class = 1; next }
+  in_class && /^[[:space:]]*end[[:space:]]*$/ { in_class = 0; next }
+  in_class && /->[[:space:]]*void/ {
+    print "class method uses non-preferred -> void syntax at line " NR ": " $0 > "/dev/stderr"
+    bad = 1
+  }
+  END { exit bad ? 1 : 0 }
+' "$source_file"; then
+  exit 65
+fi
+
+expected_ref="$(tr -d '[:space:]' < "$source_ref_file")"
+if [[ ! "$expected_ref" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "SOURCE_REF must contain exactly one lowercase 40-character git SHA" >&2
+  exit 65
+fi
+
+echo "router static audit: PASS"
+ >/dev/null; then
+  echo "all class declarations must include the trailing 'as' body marker" >&2
+  exit 65
+fi
+
+# Fat arrow is type-level/non-callable syntax; this router source should not
+# contain callable declarations using it.
+if grep -Eq '(^|[[:space:]])=>[[:space:]]' "$source_file"; then
+  echo "callable declarations must use '->' (or ': void' for void class methods), not '=>'" >&2
   exit 65
 fi
 
