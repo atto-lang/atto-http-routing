@@ -134,7 +134,7 @@ define module http_routing as
   end
 
   define class Endpoint as
-    val pattern structural PathPattern_value;
+    val PathPattern pattern_value;
     val Array<RouteTarget> targets_value;
 
     pub template() -> String {
@@ -226,7 +226,7 @@ define module http_routing as
   end
 
   define class BuildEndpoint as
-    val pattern structural PathPattern_value;
+    val PathPattern pattern_value;
     let Array<RouteTarget> targets_value = new Array<RouteTarget>();
 
     pub template() -> String {
