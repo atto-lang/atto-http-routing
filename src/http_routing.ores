@@ -70,7 +70,7 @@ define module http_routing as
     // Scope/group composition stays explicit because current Oreslang does not
     // yet expose a general String concatenation/splitting standard-library
     // contract. The caller supplies the canonical combined route template.
-    pub concat(String combined_template, PathPattern suffix) -> PathPattern {
+    pub concat(String combined_template, suffix structural PathPattern) -> PathPattern {
       let Array<PathSegment> combined = new Array<PathSegment>();
 
       for (const segment of self.segments_value) {
@@ -134,7 +134,7 @@ define module http_routing as
   end
 
   define class Endpoint as
-    val PathPattern pattern_value;
+    val pattern structural PathPattern_value;
     val Array<RouteTarget> targets_value;
 
     pub template() -> String {
@@ -226,7 +226,7 @@ define module http_routing as
   end
 
   define class BuildEndpoint as
-    val PathPattern pattern_value;
+    val pattern structural PathPattern_value;
     let Array<RouteTarget> targets_value = new Array<RouteTarget>();
 
     pub template() -> String {
@@ -320,7 +320,7 @@ define module http_routing as
 
     pub route(
       String method_value,
-      PathPattern pattern,
+      pattern structural PathPattern,
       int handler_id
     ) -> Result<bool, String> {
       return self.route(method_value, pattern, handler_id, -1, -1, "");
@@ -328,7 +328,7 @@ define module http_routing as
 
     pub route(
       String method_value,
-      PathPattern pattern,
+      pattern structural PathPattern,
       int handler_id,
       int pipeline_id,
       int contract_id,
@@ -408,12 +408,12 @@ define module http_routing as
       return Ok(true);
     }
 
-    pub get(PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub get(pattern structural PathPattern, int handler_id) -> Result<bool, String> {
       return self.route("GET", pattern, handler_id);
     }
 
     pub get(
-      PathPattern pattern,
+      pattern structural PathPattern,
       int handler_id,
       int pipeline_id,
       int contract_id,
@@ -422,12 +422,12 @@ define module http_routing as
       return self.route("GET", pattern, handler_id, pipeline_id, contract_id, operation_id);
     }
 
-    pub post(PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub post(pattern structural PathPattern, int handler_id) -> Result<bool, String> {
       return self.route("POST", pattern, handler_id);
     }
 
     pub post(
-      PathPattern pattern,
+      pattern structural PathPattern,
       int handler_id,
       int pipeline_id,
       int contract_id,
@@ -436,27 +436,27 @@ define module http_routing as
       return self.route("POST", pattern, handler_id, pipeline_id, contract_id, operation_id);
     }
 
-    pub put(PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub put(pattern structural PathPattern, int handler_id) -> Result<bool, String> {
       return self.route("PUT", pattern, handler_id);
     }
 
-    pub patch(PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub patch(pattern structural PathPattern, int handler_id) -> Result<bool, String> {
       return self.route("PATCH", pattern, handler_id);
     }
 
-    pub delete(PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub delete(pattern structural PathPattern, int handler_id) -> Result<bool, String> {
       return self.route("DELETE", pattern, handler_id);
     }
 
-    pub head(PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub head(pattern structural PathPattern, int handler_id) -> Result<bool, String> {
       return self.route("HEAD", pattern, handler_id);
     }
 
-    pub options(PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub options(pattern structural PathPattern, int handler_id) -> Result<bool, String> {
       return self.route("OPTIONS", pattern, handler_id);
     }
 
-    pub any(PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub any(pattern structural PathPattern, int handler_id) -> Result<bool, String> {
       return self.route("*", pattern, handler_id);
     }
 
@@ -537,7 +537,7 @@ define module http_routing as
     match_node(
       int node_index,
       int segment_index,
-      RequestPath request_path_value,
+      request_path_value structural RequestPath,
       SearchBudget budget
     ) -> int {
       if budget.remaining <= 0; do
@@ -633,7 +633,7 @@ define module http_routing as
       return false;
     }
 
-    pub resolve(String method_value, RequestPath request_path_value) -> Decision {
+    pub resolve(String method_value, request_path_value structural RequestPath) -> Decision {
       if request_path_value.size() > self.max_segments_value; do
         return new Decision(4, -1, -1, -1, -1, -1, "", "", false, request_path_value);
       fi
@@ -697,7 +697,7 @@ define module http_routing as
       );
     }
 
-    pub capture(Decision decision, String name) -> Option<PathCapture> {
+    pub capture(decision structural Decision, String name) -> Option<PathCapture> {
       if decision.endpoint_index < 0; do
         return None;
       fi
@@ -730,7 +730,7 @@ define module http_routing as
       return None;
     }
 
-    pub capture_one(Decision decision, String name) -> Option<String> {
+    pub capture_one(decision structural Decision, String name) -> Option<String> {
       val Option<PathCapture> captured = self.capture(decision, name);
       if captured.is_none(); do
         return None;
@@ -738,7 +738,7 @@ define module http_routing as
       return captured.unwrap().one();
     }
 
-    pub allow_count(Decision decision) -> int {
+    pub allow_count(decision structural Decision) -> int {
       if decision.endpoint_index < 0; do
         return 0;
       fi
@@ -757,7 +757,7 @@ define module http_routing as
       return count;
     }
 
-    pub allow_method_at(Decision decision, int requested_index) -> Option<String> {
+    pub allow_method_at(decision structural Decision, int requested_index) -> Option<String> {
       if decision.endpoint_index < 0 || requested_index < 0; do
         return None;
       fi
