@@ -218,7 +218,7 @@ define module http_routing as
       return -1;
     }
 
-    pub add_literal(String literal_value, int child_index): void {
+    pub add_literal(self &mut BuildNode)(String literal_value, int child_index): void {
       self.static_names.add(literal_value);
       self.static_children.add(child_index);
       return;
@@ -246,7 +246,7 @@ define module http_routing as
       return -1;
     }
 
-    pub add_target(RouteTarget target): void {
+    pub add_target(self &mut BuildEndpoint)(RouteTarget target): void {
       self.targets_value.add(target);
       return;
     }
@@ -278,29 +278,29 @@ define module http_routing as
     let int max_segments_value = 128;
     let int max_match_steps_value = 4096;
 
-    ensure_root(): void {
+    ensure_root(self &mut RouterBuilder)(): void {
       if self.nodes.size == 0; then
         self.nodes.add(new BuildNode());
       fi
       return;
     }
 
-    new_node() -> int {
+    new_node(self &mut RouterBuilder)() -> int {
       self.nodes.add(new BuildNode());
       return self.nodes.size - 1;
     }
 
-    pub set_automatic_head(bool enabled): void {
+    pub set_automatic_head(self &mut RouterBuilder)(bool enabled): void {
       self.automatic_head_value = enabled;
       return;
     }
 
-    pub set_automatic_options(bool enabled): void {
+    pub set_automatic_options(self &mut RouterBuilder)(bool enabled): void {
       self.automatic_options_value = enabled;
       return;
     }
 
-    pub set_limits(int max_segments, int max_match_steps) -> Result<bool, String> {
+    pub set_limits(self &mut RouterBuilder)(int max_segments, int max_match_steps) -> Result<bool, String> {
       if max_segments <= 0; then
         return Err("max_segments must be positive");
       fi
@@ -318,7 +318,7 @@ define module http_routing as
       return Ok(true);
     }
 
-    pub route(
+    pub route(self &mut RouterBuilder)(
       String method_value,
       PathPattern pattern,
       int handler_id
@@ -326,7 +326,7 @@ define module http_routing as
       return self.route(method_value, pattern, handler_id, -1, -1, "");
     }
 
-    pub route(
+    pub route(self &mut RouterBuilder)(
       String method_value,
       PathPattern pattern,
       int handler_id,
@@ -352,7 +352,7 @@ define module http_routing as
 
       for (let int segment_index = 0; segment_index < pattern.size(); segment_index = segment_index + 1) {
         val PathSegment segment = pattern.segment_at(segment_index);
-        val BuildNode current = self.nodes.get(node_index);
+        let BuildNode current = self.nodes.get(node_index);
 
         if segment.kind == 0; then
           let int child_index = current.child_for_literal(segment.value);
@@ -380,7 +380,7 @@ define module http_routing as
         fi
       }
 
-      val BuildNode leaf = self.nodes.get(node_index);
+      let BuildNode leaf = self.nodes.get(node_index);
 
       if leaf.endpoint_index < 0; then
         self.endpoints.add(new BuildEndpoint(pattern.copy()));
@@ -392,7 +392,7 @@ define module http_routing as
         fi
       fi
 
-      val BuildEndpoint endpoint = self.endpoints.get(leaf.endpoint_index);
+      let BuildEndpoint endpoint = self.endpoints.get(leaf.endpoint_index);
 
       if endpoint.find_method(method_value) >= 0; then
         return Err("duplicate method for route");
@@ -408,11 +408,11 @@ define module http_routing as
       return Ok(true);
     }
 
-    pub get(PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub get(self &mut RouterBuilder)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("GET", pattern, handler_id);
     }
 
-    pub get(
+    pub get(self &mut RouterBuilder)(
       PathPattern pattern,
       int handler_id,
       int pipeline_id,
@@ -422,11 +422,11 @@ define module http_routing as
       return self.route("GET", pattern, handler_id, pipeline_id, contract_id, operation_id);
     }
 
-    pub post(PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub post(self &mut RouterBuilder)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("POST", pattern, handler_id);
     }
 
-    pub post(
+    pub post(self &mut RouterBuilder)(
       PathPattern pattern,
       int handler_id,
       int pipeline_id,
@@ -436,31 +436,31 @@ define module http_routing as
       return self.route("POST", pattern, handler_id, pipeline_id, contract_id, operation_id);
     }
 
-    pub put(PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub put(self &mut RouterBuilder)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("PUT", pattern, handler_id);
     }
 
-    pub patch(PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub patch(self &mut RouterBuilder)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("PATCH", pattern, handler_id);
     }
 
-    pub delete(PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub delete(self &mut RouterBuilder)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("DELETE", pattern, handler_id);
     }
 
-    pub head(PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub head(self &mut RouterBuilder)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("HEAD", pattern, handler_id);
     }
 
-    pub options(PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub options(self &mut RouterBuilder)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("OPTIONS", pattern, handler_id);
     }
 
-    pub any(PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub any(self &mut RouterBuilder)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("*", pattern, handler_id);
     }
 
-    pub build() -> Router {
+    pub build(self &mut RouterBuilder)() -> Router {
       self.ensure_root();
 
       let Array<int> node_static_start = new Array<int>();
@@ -538,7 +538,7 @@ define module http_routing as
       int node_index,
       int segment_index,
       RequestPath request_path_value,
-      SearchBudget budget
+      &mut SearchBudget budget
     ) -> int {
       if budget.remaining <= 0; then
         return -2;
@@ -639,7 +639,7 @@ define module http_routing as
       fi
 
       let SearchBudget budget = new SearchBudget(self.max_match_steps_value);
-      val int endpoint_index = self.match_node(0, 0, request_path_value, budget);
+      val int endpoint_index = self.match_node(0, 0, request_path_value, &mut budget);
 
       if endpoint_index == -2; then
         return new Decision(4, -1, -1, -1, -1, -1, "", "", false, request_path_value);
