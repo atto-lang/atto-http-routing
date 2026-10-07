@@ -65,3 +65,15 @@ Typed extractors should run after routing using contract_id and application
 metadata. This mirrors the useful separation in extractor-based routers:
 matching selects the endpoint; validation/extraction turns protocol data into
 typed application inputs.
+
+## Actor adapters
+
+Registration borrows patterns (`routes.get(&pattern, handler_id)`), while the
+builder copies pattern data into its own storage. Inspection helpers borrow
+matching decisions (`router.capture_one(&decision, "id")`). A decision owns a
+detached request-path snapshot, and a capture is a view over that snapshot.
+
+A dispatcher must not send a Decision, PathCapture, or Router object to an
+isolated actor. Extract immutable scalar strings and place them in the actor's
+request capability before transferring it. Keep handler objects in the host
+adapter's registry; routing metadata contains only scalar IDs and operation names.

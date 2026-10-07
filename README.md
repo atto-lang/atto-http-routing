@@ -32,7 +32,7 @@ sharing.
 ```ores
 import module http_routing from "src/http_routing";
 
-let routes = http_routing.builder();
+val routes = http_routing.builder();
 
 val show_user = http_routing.path("/users/{id}", arr[
   http_routing.literal("users"),
@@ -40,7 +40,7 @@ val show_user = http_routing.path("/users/{id}", arr[
 ]);
 
 routes.get(
-  show_user,
+  &show_user,
   1001,          // handler_id
   7,             // pipeline_id
   42,            // contract_id
@@ -55,7 +55,7 @@ val decision = router.resolve(
 );
 
 if decision.is_match(); do
-  val user_id = router.capture_one(decision, "id").unwrap();
+  val user_id = router.capture_one(&decision, "id").unwrap();
   stdio.println(user_id);
 fi
 ```
@@ -151,8 +151,9 @@ comparison, and failure propagation. It rejects floating SOURCE_REF values and
 dirty explicit compiler checkouts. Actions run with read-only permissions and
 no persisted credentials.
 
-This gate does not establish native routing correctness. The 2026-10-07 probe
-against compiler `5ffc52d9297d175307094d530293c69f1cafc7cd` rejected the old
-`mut SearchBudget budget` parameter syntax in `src/http_routing.ores`. Preserve
-SOURCE_REF until canonical mutation syntax and ownership are migrated and the
-full routing golden suite passes on an exact compiler revision.
+The native suite now passes after migrating to explicit pattern/decision borrows,
+`&mut SearchBudget`, and mutable collection bindings. `resolve` owns its incoming
+path and constructs a detached path snapshot for the returned decision; captures
+remain views over that snapshot. `SOURCE_REF` pins the tested compiler/runtime.
+The golden output also includes the two boolean prints already present in the
+fixture (automatic-HEAD registration and rejecting an over-limit route).
