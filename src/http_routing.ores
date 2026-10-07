@@ -361,11 +361,11 @@ define module http_routing as
             current.add_literal(segment.value, child_index);
           fi
           node_index = child_index;
-        elseif segment.kind == 1; then
+        elif segment.kind == 1; then
           if current.param_child < 0; then
             current.param_child = self.new_node();
             current.param_name = segment.value;
-          elseif current.param_name != segment.value; then
+          elif current.param_name != segment.value; then
             return Err("conflicting parameter name at the same route position");
           fi
           node_index = current.param_child;
@@ -373,7 +373,7 @@ define module http_routing as
           if current.wildcard_child < 0; then
             current.wildcard_child = self.new_node();
             current.wildcard_name = segment.value;
-          elseif current.wildcard_name != segment.value; then
+          elif current.wildcard_name != segment.value; then
             return Err("conflicting wildcard name at the same route position");
           fi
           node_index = current.wildcard_child;
@@ -710,7 +710,7 @@ define module http_routing as
 
         if segment.kind == 0; then
           request_index = request_index + 1;
-        elseif segment.kind == 1; then
+        elif segment.kind == 1; then
           if segment.value == name; then
             return Some(new PathCapture(decision.path(), request_index, 1));
           fi
