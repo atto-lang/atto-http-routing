@@ -40,7 +40,7 @@ val show_user = http_routing.path("/users/{id}", arr[
 ]);
 
 routes.get(
-  &show_user,
+  rt borrow show_user,
   1001,          // handler_id
   7,             // pipeline_id
   42,            // contract_id
@@ -55,7 +55,7 @@ val decision = router.resolve(
 );
 
 if decision.is_match(); do
-  val user_id = router.capture_one(&decision, "id").unwrap();
+  val user_id = router.capture_one(rt borrow decision, "id").unwrap();
   stdio.println(user_id);
 fi
 ```
@@ -152,7 +152,7 @@ dirty explicit compiler checkouts. Actions run with read-only permissions and
 no persisted credentials.
 
 The native suite now passes after migrating to explicit pattern/decision borrows,
-`&mut SearchBudget`, and mutable collection bindings. `resolve` owns its incoming
+`borrow mut SearchBudget`, and mutable collection bindings. `resolve` owns its incoming
 path and constructs a detached path snapshot for the returned decision; captures
 remain views over that snapshot. `SOURCE_REF` pins the tested compiler/runtime.
 The golden output also includes the two boolean prints already present in the
