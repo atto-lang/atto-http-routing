@@ -142,3 +142,17 @@ testing against an unrelated local Oreslang checkout.
 ## 2026-10-06 compiler PR compatibility
 
 For the latest 10 upstream Oreslang compiler PRs, see [docs/compiler-pr-sync.md](docs/compiler-pr-sync.md). These features remain unmerged; this repo preserves its existing compiler reference and defaults until exact-SHA integration evidence is available.
+
+## Runner CI and native-suite coverage
+
+The `Test runner contracts` workflow uses a compiler test double to verify the
+working directory, exact arguments, check-before-run ordering, golden-output
+comparison, and failure propagation. It rejects floating SOURCE_REF values and
+dirty explicit compiler checkouts. Actions run with read-only permissions and
+no persisted credentials.
+
+This gate does not establish native routing correctness. The 2026-10-07 probe
+against compiler `5ffc52d9297d175307094d530293c69f1cafc7cd` rejected the old
+`mut SearchBudget budget` parameter syntax in `src/http_routing.ores`. Preserve
+SOURCE_REF until canonical mutation syntax and ownership are migrated and the
+full routing golden suite passes on an exact compiler revision.
