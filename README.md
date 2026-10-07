@@ -138,3 +138,7 @@ builder snapshot isolation, duplicate/conflicting routes, and routing limits.
 The pinned compiler revision is the native-collections feature stack plus the mandatory module-`as` parser integration,
 so this library intentionally tracks that exact SHA rather than silently
 testing against an unrelated local Oreslang checkout.
+
+## 2026-10-06 compiler PR compatibility
+
+For the latest 10 upstream Oreslang compiler PRs, see [docs/compiler-pr-sync.md](docs/compiler-pr-sync.md). These features remain unmerged; this repo preserves its existing compiler reference and defaults until exact-SHA integration evidence is available.
