@@ -157,3 +157,8 @@ path and constructs a detached path snapshot for the returned decision; captures
 remain views over that snapshot. `SOURCE_REF` pins the tested compiler/runtime.
 The golden output also includes the two boolean prints already present in the
 fixture (automatic-HEAD registration and rejecting an over-limit route).
+
+## Backend compatibility
+
+See [the compiler compatibility contract](docs/BACKENDS.md) for pinned Java/LLVM
+revisions, reproducible checks, and unsupported features.
