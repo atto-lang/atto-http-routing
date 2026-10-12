@@ -8,8 +8,14 @@
     "pin": "LLVM_SOURCE_REF",
     "execution": "unsupported",
     "rejection_probes": [
-      "tests/router_semantics.ores",
-      "src/http_routing.ores"
+      {
+        "path": "tests/router_semantics.ores",
+        "diagnostic": "oreslang-llvmc: expected fnc or routine at byte 0"
+      },
+      {
+        "path": "src/http_routing.ores",
+        "diagnostic": "oreslang-llvmc: expected 'let' at byte 558"
+      }
     ]
   }
 }
