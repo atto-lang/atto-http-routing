@@ -32,6 +32,19 @@ class BackendChecks(unittest.TestCase):
         return checker.load_contract()
     def test_valid_contract(self):
         self.assertEqual(self.load(), self.contract)
+    def test_precise_final_field_boundary(self):
+        prefix='oreslang-llvmc: final class field requires declaration-site initializer at byte '
+        self.contract['llvm']['rejection_probes'][0]['diagnostic']=prefix+'570'
+        self.assertEqual(self.load(), self.contract)
+        for suffix in ('bad', '570 extra error', ''):
+            self.contract['llvm']['rejection_probes'][0]['diagnostic']=prefix+suffix
+            with self.subTest(suffix=suffix), self.assertRaises(RuntimeError): self.load()
+    def test_native_i32_os_entrypoint(self):
+        valid='define i32 @main() {\n ret i32 42\n}\n'
+        checker.check_positive(subprocess.CompletedProcess([],0,valid,''))
+        for code,ir in [(1,valid),(-11,valid),(0,''),(0,'define i64 @main() { ret i64 42 }')]:
+            with self.subTest(code=code,ir=ir), self.assertRaises(RuntimeError):
+                checker.check_positive(subprocess.CompletedProcess([],code,ir,'failure'))
     def test_empty_probes_rejected(self):
         self.contract['llvm']['rejection_probes'] = []
         with self.assertRaises(RuntimeError): self.load()

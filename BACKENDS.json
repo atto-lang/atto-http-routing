@@ -10,11 +10,11 @@
     "rejection_probes": [
       {
         "path": "tests/router_semantics.ores",
-        "diagnostic": "oreslang-llvmc: expected fnc or routine at byte 0"
+        "diagnostic": "oreslang-llvmc: expected non-keyword identifier at byte 69"
       },
       {
         "path": "src/http_routing.ores",
-        "diagnostic": "oreslang-llvmc: expected 'let' at byte 558"
+        "diagnostic": "oreslang-llvmc: final class field requires declaration-site initializer at byte 570"
       }
     ]
   }
