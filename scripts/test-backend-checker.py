@@ -32,6 +32,19 @@ class BackendChecks(unittest.TestCase):
         return checker.load_contract()
     def test_valid_contract(self):
         self.assertEqual(self.load(), self.contract)
+    def test_precise_final_field_boundary(self):
+        prefix='oreslang-llvmc: final class field requires declaration-site initializer at byte '
+        self.contract['llvm']['rejection_probes'][0]['diagnostic']=prefix+'570'
+        self.assertEqual(self.load(), self.contract)
+        for suffix in ('bad', '570 extra error', ''):
+            self.contract['llvm']['rejection_probes'][0]['diagnostic']=prefix+suffix
+            with self.subTest(suffix=suffix), self.assertRaises(RuntimeError): self.load()
+    def test_native_i32_os_entrypoint(self):
+        valid='define i32 @main() {\n ret i32 42\n}\n'
+        checker.check_positive(subprocess.CompletedProcess([],0,valid,''))
+        for code,ir in [(1,valid),(-11,valid),(0,''),(0,'define i64 @main() { ret i64 42 }')]:
+            with self.subTest(code=code,ir=ir), self.assertRaises(RuntimeError):
+                checker.check_positive(subprocess.CompletedProcess([],code,ir,'failure'))
     def test_empty_probes_rejected(self):
         self.contract['llvm']['rejection_probes'] = []
         with self.assertRaises(RuntimeError): self.load()
@@ -86,5 +99,20 @@ class BackendChecks(unittest.TestCase):
             with self.assertRaises(RuntimeError): checker.require_source('BACKEND_TEST_SOURCE','SOURCE_REF')
             with patch.object(checker,'git',side_effect=subprocess.CalledProcessError(128,['git'])):
                 with self.assertRaises(subprocess.CalledProcessError): checker.require_source('BACKEND_TEST_SOURCE','SOURCE_REF')
+
+class BoundedCompilerOutput(unittest.TestCase):
+    def test_real_process_streams_preserved(self):
+        result = checker.run_bounded([sys.executable, '-c', "import sys;print('IR');print('diagnostic',file=sys.stderr);sys.exit(1)"])
+        self.assertEqual((result.returncode, result.stdout, result.stderr), (1, 'IR\n', 'diagnostic\n'))
+    def test_output_floods_fail_before_contract_admission(self):
+        for fd in (1, 2):
+            with self.subTest(fd=fd), self.assertRaisesRegex(RuntimeError, 'output budget'):
+                checker.run_bounded([sys.executable, '-c', f"import os;os.write({fd},b'x'*2000000)"], max_bytes=32768)
+    def test_timeout_kills_process(self):
+        with self.assertRaises(subprocess.TimeoutExpired):
+            checker.run_bounded([sys.executable, '-c', 'import time;time.sleep(10)'], timeout=0.1)
+    def test_invalid_utf8_rejected(self):
+        with self.assertRaises(UnicodeDecodeError):
+            checker.run_bounded([sys.executable, '-c', "import os;os.write(1,bytes([255]))"])
 
 if __name__ == '__main__': unittest.main()
