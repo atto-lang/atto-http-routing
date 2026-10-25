@@ -128,8 +128,7 @@ See [docs/DESIGN.md](docs/DESIGN.md) and
 This repository pins the compiler/runtime revision in `SOURCE_REF`.
 
 ```bash
-ORESLANG_SOURCE_DIR=/path/to/pinned/compiler-checkout \
-  ORESLANG_COMPILER=/path/to/oreslang-compiler bash scripts/test.sh
+ORESLANG_COMPILER=/path/to/oreslang-compiler bash scripts/test.sh
 ```
 
 The suite covers precedence/backtracking, captures, wildcard behavior, 404/405,
@@ -159,8 +158,7 @@ remain views over that snapshot. `SOURCE_REF` pins the tested compiler/runtime.
 The golden output also includes the two boolean prints already present in the
 fixture (automatic-HEAD registration and rejecting an over-limit route).
 
-### Exact compiler validation
+## Backend compatibility
 
-`ORESLANG_SOURCE_DIR` is required by `scripts/test.sh`; set it to a clean Git checkout at `SOURCE_REF`, and use `ORESLANG_COMPILER` built from that checkout. The runner rejects absent provenance and Git status failures before invoking the compiler. The checkout check alone cannot establish the identity of an arbitrary externally supplied binary; the build and test must use the same source tree.
-
-`bash scripts/test-runner.sh` exercises the shell runner using a test double and a temporary Git checkout. It does not execute Oreslang or certify compiler compatibility.
+See [the compiler compatibility contract](docs/BACKENDS.md) for pinned Java/LLVM
+revisions, reproducible checks, and unsupported features.
