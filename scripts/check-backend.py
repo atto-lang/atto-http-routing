@@ -62,13 +62,17 @@ def load_contract():
             raise RuntimeError('Duplicate LLVM rejection probe')
         seen.add(path)
         diagnostic = probe['diagnostic']
-        if not isinstance(diagnostic, str) or not diagnostic.startswith('oreslang-llvmc: expected ') or '\n' in diagnostic:
+        if not isinstance(diagnostic, str) or '\n' in diagnostic or not (diagnostic.startswith('oreslang-llvmc: expected ') or re.fullmatch(r'oreslang-llvmc: final class field requires declaration-site initializer at byte [0-9]+', diagnostic)):
             raise RuntimeError('Expected a specific unsupported-syntax diagnostic')
     return contract
 
 def check_rejection(result, probe):
     if result.returncode != 1 or result.stdout.strip() or result.stderr.strip() != probe['diagnostic']:
         raise RuntimeError(f"Unexpected rejection result for {probe['path']}: exit={result.returncode}\n{result.stderr}")
+
+def check_positive(result):
+    if result.returncode or not re.search(r'^define i32 @main\(\)', result.stdout, re.MULTILINE):
+        raise RuntimeError('LLVM positive control failed; rejection is not evidence of compatibility: ' + result.stderr)
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -89,8 +93,7 @@ def main():
         baseline = Path(directory) / 'baseline.ores'
         baseline.write_text('pub fnc main(): int { return 42; }\n')
         positive = run_bounded([str(compiler), str(baseline)])
-        if positive.returncode or 'define i64 @main(' not in positive.stdout:
-            raise RuntimeError('LLVM positive control failed; rejection is not evidence of compatibility: ' + positive.stderr)
+        check_positive(positive)
         for probe in contract['llvm']['rejection_probes']:
             entry = local_file(probe['path'])
             result = run_bounded([str(compiler), str(entry)])
