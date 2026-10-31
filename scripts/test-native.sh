@@ -5,6 +5,24 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 : "${ORESLANG_SOURCE_DIR:?Set ORESLANG_SOURCE_DIR to the approved compiler checkout}"
 source_dir="$(cd "$ORESLANG_SOURCE_DIR" && pwd -P)"
+: "${ROUTER_EXPECTED_HEAD:?Set ROUTER_EXPECTED_HEAD to the full reviewed PR-head SHA}"
+if [[ ! "$ROUTER_EXPECTED_HEAD" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "ROUTER_EXPECTED_HEAD must be a full lowercase SHA" >&2
+  exit 65
+fi
+router_actual="$(git -C "$repo_root" rev-parse HEAD)"
+if [[ "$router_actual" != "$ROUTER_EXPECTED_HEAD" ]]; then
+  echo "wrong router head: actual=$router_actual expected=$ROUTER_EXPECTED_HEAD" >&2
+  exit 65
+fi
+router_status="$(git -C "$repo_root" status --porcelain --untracked-files=all)" || {
+  echo "cannot inspect router checkout status" >&2
+  exit 65
+}
+if [[ -n "$router_status" ]]; then
+  echo "router checkout is dirty; refusing exact-head acceptance" >&2
+  exit 65
+fi
 expected_ref="$(tr -d '[:space:]' < "$repo_root/SOURCE_REF")"
 
 if [[ ! "$expected_ref" =~ ^[0-9a-f]{40}$ ]]; then
