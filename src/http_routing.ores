@@ -353,6 +353,50 @@ define module http_routing as
         return Err("route pattern exceeds max_segments");
       fi
 
+      // Admission is read-only. Reject competing capture names, alternate
+      // canonical templates and duplicate methods BEFORE touching any trie
+      // node/endpoint. This preserves builder state on every Err path, even
+      // if future registration features add more mutation steps.
+      let int existing_node_index = -1;
+      if self.nodes.size > 0; then
+        existing_node_index = 0;
+      fi
+
+      for (let int segment_index = 0; segment_index < pattern.size(); segment_index = segment_index + 1) {
+        if existing_node_index >= 0; then
+          val BuildNode existing_node = self.nodes.get(existing_node_index);
+          val PathSegment candidate = pattern.segment_at(segment_index);
+          if candidate.kind == 0; then
+            existing_node_index = existing_node.child_for_literal(candidate.value);
+          elif candidate.kind == 1; then
+            if existing_node.param_child >= 0 && existing_node.param_name != candidate.value; then
+              return Err("conflicting parameter name at the same route position");
+            fi
+            existing_node_index = existing_node.param_child;
+          else
+            if existing_node.wildcard_child >= 0 && existing_node.wildcard_name != candidate.value; then
+              return Err("conflicting wildcard name at the same route position");
+            fi
+            existing_node_index = existing_node.wildcard_child;
+          fi
+        fi
+      }
+
+      if existing_node_index >= 0; then
+        val BuildNode existing_leaf = self.nodes.get(existing_node_index);
+        if existing_leaf.endpoint_index >= 0; then
+          val BuildEndpoint existing_endpoint = self.endpoints.get(existing_leaf.endpoint_index);
+          if existing_endpoint.template() != pattern.template(); then
+            return Err("same route shape registered with a different canonical template");
+          fi
+          if existing_endpoint.find_method(method_value) >= 0; then
+            return Err("duplicate method for route");
+          fi
+        fi
+      fi
+
+      // Commit phase: every known recoverable admission error was checked
+      // before entering this mutation-only path.
       self.ensure_root();
       let int node_index = 0;
 
