@@ -70,7 +70,7 @@ table.
 Patterns are currently constructed from segments:
 
 - `literal("users")` — exact segment
-- `param("id")` — one named segment
+- `param("id")` — one **non-empty** named decoded segment
 - `wildcard("rest")` — zero or more remaining segments; must be last
 - `root()` — root path
 
@@ -105,7 +105,8 @@ contract without changing the compiled router or match semantics.
   synthesized HEAD and OPTIONS.
 - Unknown paths are distinct from method-not-allowed.
 - Trailing/repeated slash semantics are strict because empty segments are
-  preserved by the adapter contract.
+  preserved by the adapter contract. Named parameters never consume empty
+  segments; use `literal("")` or a terminal wildcard for explicit empty paths.
 
 ## Safety and performance
 
@@ -135,7 +136,7 @@ The baseline suite covers precedence/backtracking, captures, wildcard behavior,
 404/405, Allow synthesis, HEAD/OPTIONS, metadata, strict slash behavior,
 builder snapshot isolation, registration conflicts, and routing limits.
 The separate [issue #22 adversarial matrix](docs/ISSUE_22_ACCEPTANCE.md)
-adds 89 deterministic assertions: forward/reverse insertion oracles,
+adds 103 deterministic assertions: forward/reverse insertion oracles,
 decoded-segment edge cases, mutation-after-build, and foreign-generation
 inspection rejection. `RouterBuilder.route()` preflights conflicts before
 mutation; decision inspectors reject structurally inconsistent foreign and
