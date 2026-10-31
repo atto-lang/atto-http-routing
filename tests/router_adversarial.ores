@@ -223,5 +223,54 @@ pub routine main() -> void {
   // A legitimate decision from the producing immutable router still works.
   val legitimate = older.resolve("GET", http_routing.request_path(arr["a", "visitor"]));
   expect(older.capture_one(rt borrow legitimate, "id").unwrap() == "visitor");
+
+  // R10: reconcile PR #27. Empty decoded path segments must not be treated
+  // as named resource IDs. Literal-empty and wildcard edges remain valid.
+  expect(older.resolve("GET", http_routing.request_path(arr["a", ""])).handler_id == 103);
+  expect(other_order.resolve("GET", http_routing.request_path(arr["a", ""])).handler_id == 103);
+  expect(older.resolve("GET", http_routing.request_path(arr["a", "", "edit"])).handler_id == 103);
+
+  val required = http_routing.path("/required/{id}", arr[
+    http_routing.literal("required"), http_routing.param("id")
+  ]);
+  val required_tail = http_routing.path("/required/{id}/tail", arr[
+    http_routing.literal("required"), http_routing.param("id"), http_routing.literal("tail")
+  ]);
+  val literal_empty = http_routing.path("/required/", arr[
+    http_routing.literal("required"), http_routing.literal("")
+  ]);
+  val required_wildcard = http_routing.path("/required/*rest", arr[
+    http_routing.literal("required"), http_routing.wildcard("rest")
+  ]);
+
+  val required_builder = http_routing.builder();
+  expect(required_builder.get(rt borrow required, 601).is_ok());
+  expect(required_builder.get(rt borrow required_tail, 602).is_ok());
+  val param_only = required_builder.build();
+  expect(param_only.resolve(
+    "GET", http_routing.request_path(arr["required", ""])
+  ).is_not_found());
+  expect(param_only.resolve(
+    "GET", http_routing.request_path(arr["required", "", "tail"])
+  ).is_not_found());
+  expect(param_only.resolve(
+    "GET", http_routing.request_path(arr["required", "ok"])
+  ).handler_id == 601);
+
+  expect(required_builder.get(rt borrow literal_empty, 603).is_ok());
+  expect(required_builder.get(rt borrow required_wildcard, 604).is_ok());
+  val with_empty = required_builder.build();
+  expect(with_empty.resolve(
+    "GET", http_routing.request_path(arr["required", ""])
+  ).handler_id == 603);
+  expect(with_empty.resolve(
+    "GET", http_routing.request_path(arr["required", "", "tail"])
+  ).handler_id == 604);
+  expect(with_empty.resolve(
+    "GET", http_routing.request_path(arr["required", "ok", "tail"])
+  ).handler_id == 602);
+  expect(with_empty.resolve(
+    "POST", http_routing.request_path(arr["required", ""])
+  ).is_method_not_allowed());
   return;
 }
