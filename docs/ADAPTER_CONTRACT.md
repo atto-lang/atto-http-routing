@@ -95,3 +95,24 @@ cryptographic or unforgeable router-generation attestation. The adapter must
 derive authorization solely from its own generation-scoped route/handler
 registry and request capability. In-flight requests must retain their original
 router snapshot until dispatch completes.
+
+## Additional router guest edge matrix
+
+`scripts/test.sh` still executes the historical `router_semantics.ores`
+with `tests/expected.txt`, then executes **every** paired
+`tests/edge_cases/*.ores` and `.expected` fixture. Missing, empty,
+orphaned, or symlinked files fail before edge guests execute; at least three
+independent cases are required.
+
+- `head-options.ores` (15 assertions): GET/HEAD fallback, suppressed HEAD
+  body, automatic OPTIONS, ordered Allow enumeration, POST 405-equivalent
+  decision (without network serialization).
+- `foreign-decision.ores` (11 assertions): cross-router decisions with
+  reused endpoint slots/templates and mismatched handler/operation metadata
+  cannot be used for capture extraction or Allow enumeration.
+- `limits-failclosed.ores` (13 assertions): path length, invalid limit
+  configuration, missing paths, invalid terminal wildcard registration, and
+  fail-closed decision inspection.
+
+A source-only check does not constitute an Oreslang compiler or runtime test.
+`Decision` remains transport-neutral data, not an authorization capability.
