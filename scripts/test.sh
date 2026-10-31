@@ -37,14 +37,21 @@ if [[ -n "$ORESLANG_SOURCE_DIR" ]]; then
   fi
 fi
 
-entry="$repo_root/tests/router_semantics.ores"
 actual="$(mktemp "${TMPDIR:-/tmp}/oreslang-http-routing.XXXXXX")"
 trap 'rm -f "$actual"' EXIT
 
 cd "$repo_root"
 
-"$compiler" --check --platform=server "$entry"
-"$compiler" --platform=server "$entry" > "$actual"
-
-diff -u "$repo_root/tests/expected.txt" "$actual"
-echo "router semantics: PASS"
+# Exact-pinned native guest execution: both suites must check, execute, and
+# match their committed golden output. Host test doubles cannot certify this.
+for suite in router_semantics router_adversarial; do
+  entry="$repo_root/tests/$suite.ores"
+  expected="$repo_root/tests/expected.txt"
+  if [[ "$suite" = router_adversarial ]]; then
+    expected="$repo_root/tests/expected_adversarial.txt"
+  fi
+  "$compiler" --check --platform=server "$entry"
+  "$compiler" --platform=server "$entry" > "$actual"
+  diff -u "$expected" "$actual"
+  echo "$suite: PASS"
+done
