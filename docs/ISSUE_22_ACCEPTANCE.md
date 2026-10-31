@@ -44,7 +44,7 @@ does not attest that the compiler executable was built from the checkout.
 
 `tests/router_semantics.ores` → `tests/expected.txt` keeps the existing
 semantics baseline. The added `tests/router_adversarial.ores` →
-`tests/expected_adversarial.txt` has **74 boolean assertions**, each with
+`tests/expected_adversarial.txt` has **78 boolean assertions**, each with
 expected stdout `true` in declaration order. A false, crash, compiler
 rejection, different line count, or nonzero process exit fails the suite.
 The Rxx comments group the guest assertions as follows:
@@ -55,7 +55,7 @@ The Rxx comments group the guest assertions as follows:
 | R02 | `GET /a/fixed`, `/a/x`, `/a/x/y`, `/a/fixed/details`, `/a/fixed/edit`, `/a` | static 101, param 102, wildcard 103, deeper static 104, backtracking 105 with `id=fixed`, empty wildcard capture; same result in both orders | valid guest |
 | R03 | `POST /a/fixed` when param permits POST; `POST /a/x`; HEAD/OPTIONS explicit and automatic; unknown path; small matching budget and segment limit | 405 (no method fallback), handler 106, HEAD via GET with body suppression, explicit HEAD/OPTIONS override, automatic OPTIONS, 404, and distinct limit-exceeded decisions | valid guest with expected negative decisions |
 | R04 | `[a,fixed,""]` and `[a,"",x]` | wildcard 103; trailing and repeated empty segment retained in capture | valid guest; **no automatic slash collapse** |
-| R05 | duplicate GET, alternate param name, alternate wildcard name, duplicate capture | `Err` on each; old snapshot unchanged **and rebuilt builder remains at five endpoints** | valid guest with negative registrations |
+| R05 | duplicate GET, alternate param name, alternate wildcard name, duplicate capture, conflicting canonical template, duplicate method and failed limit update | `Err` on each; old snapshot unchanged **and rebuilt builder remains at five endpoints** | valid guest with negative registrations |
 | R06 | retain an old captured Decision; append route and toggle HEAD/OPTIONS after build | old captures intact; old snapshot unchanged; new snapshot sees route 120 and disabled method synthesis | valid guest; **no concurrent actors exercised** |
 | R07 | already-decoded `[esc,"/"]`, `[esc,"%2F"]`, `[esc,"%252F"]`, `[esc,"%GG"]` | distinct literal matches 301/302; opaque capture 303 retains exact `%252F`/`%GG` strings; **no second decode or split** | valid guest at decoded boundary, not raw percent validation |
 | R08 | already-decoded `[esc,".."]` | captures `..` unchanged; demonstrates why adapter must reject traversal before routing | **negative security witness; rejection NOT supplied by router** |
