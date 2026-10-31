@@ -1,0 +1,19 @@
+# Diagnostic only: no checkout, no repo content, no secrets, no dependencies.
+# An executed step distinguishes runner admission from pre-run failures.
+name: Source-free runner admission canary
+on:
+  push:
+    branches:
+      - ci/source-free-admission-20261031
+  workflow_dispatch:
+permissions: {}
+jobs:
+  admission:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Admission proof (no checkout)
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' 'ROUTER_ADMISSION_CANARY_EXECUTED=1'
