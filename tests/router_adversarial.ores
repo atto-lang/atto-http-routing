@@ -126,6 +126,16 @@ pub routine main() -> void {
   expect(forward.get(rt borrow repeated_capture, 902).is_err());
   expect(older.route_count() == 5);
 
+  // A different textual template for the same trie shape and method
+  // duplicates must fail before altering the registered endpoint.
+  val noncanonical = http_routing.path("/a/<id>", arr[
+    http_routing.literal("a"), http_routing.param("id")
+  ]);
+  expect(forward.get(rt borrow noncanonical, 903).is_err());
+  expect(forward.post(rt borrow parameter, 904).is_err());
+  expect(forward.get(rt borrow fixed, -1).is_err());
+  expect(forward.set_limits(1, 32).is_err());
+
   // All rejected registrations leave the mutable builder's compiled
   // routing behavior unchanged as well as the previously frozen snapshot.
   val after_rejections = forward.build();
