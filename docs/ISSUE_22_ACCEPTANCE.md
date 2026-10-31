@@ -16,6 +16,23 @@ ORESLANG_COMPILER=/absolute/path/to/verified/oreslang-compiler \
 bash scripts/test.sh
 ```
 
+For exact-head native acceptance, prefer the wrapper below **from a clean
+checkout of the reviewed PR head**, with the full independently recorded head
+SHA supplied by the reviewer:
+
+```sh
+ROUTER_EXPECTED_HEAD=<full-40-character-reviewed-PR-head> \
+ORESLANG_SOURCE_DIR=/absolute/path/to/pinned/clean/compiler-checkout \
+bash scripts/test-native.sh
+```
+
+The wrapper rejects dirty or mismatched router/compiler checkouts, prints
+router/compiler commits and tree IDs plus Maven/Java versions, performs a
+fresh Maven `clean package` / launcher-classpath build from the pinned compiler
+source, then launches the actual compiler via `scripts/compiler.sh`. Its
+exit status must be captured with executed job step metadata and stdout.
+Dependency provenance and independent runner admission remain separate.
+
 `scripts/test.sh` checks the SHA/clean checkout, checks each guest
 (`--check --platform=server`), **executes each guest**
 (`--platform=server`), and diffs deterministic stdout with committed golden
