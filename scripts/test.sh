@@ -37,18 +37,6 @@ if [[ -n "$ORESLANG_SOURCE_DIR" ]]; then
   fi
 fi
 
-entry="$repo_root/tests/router_semantics.ores"
-actual="$(mktemp "${TMPDIR:-/tmp}/oreslang-http-routing.XXXXXX")"
-trap 'rm -f "$actual"' EXIT
-
-cd "$repo_root"
-
-"$compiler" --check --platform=server "$entry"
-"$compiler" --platform=server "$entry" > "$actual"
-
-diff -u "$repo_root/tests/expected.txt" "$actual"
-echo "router semantics: PASS"
-
 # The edge matrix is intentionally separate from the legacy monolithic
 # semantics guest. Enforce paired, non-symlink fixtures before running any
 # new guest so tests cannot silently disappear or escape the checkout.
@@ -77,6 +65,27 @@ for expected in "${edge_expected[@]}"; do
     exit 65
   }
 done
+
+entry="$repo_root/tests/router_semantics.ores"
+legacy_expected="$repo_root/tests/expected.txt"
+[[ -d "$repo_root/tests" && ! -L "$repo_root/tests" &&
+   -f "$entry" && ! -L "$entry" &&
+   -f "$legacy_expected" && ! -L "$legacy_expected" && -s "$legacy_expected" ]] || {
+  echo "unsafe or missing router legacy fixture" >&2
+  exit 65
+}
+actual="$(mktemp "${TMPDIR:-/tmp}/oreslang-http-routing.XXXXXX")"
+trap 'rm -f "$actual"' EXIT
+
+cd "$repo_root"
+
+"$compiler" --check --platform=server "$entry"
+"$compiler" --platform=server "$entry" > "$actual"
+
+diff -u "$repo_root/tests/expected.txt" "$actual"
+echo "router semantics: PASS"
+
+
 for source in "${edge_sources[@]}"; do
   expected="${source%.ores}.expected"
   "$compiler" --check --platform=server "$source"
