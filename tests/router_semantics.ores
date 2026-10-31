@@ -154,5 +154,22 @@ pub routine main() -> void {
   );
   stdio.println(limited_builder.get(rt borrow users_edit, 201).is_err());
 
+  // Cross-router decisions are not capabilities. Even if a different router
+  // assigns the same endpoint slot/template, changed handler metadata must
+  // not be used for capture extraction or Allow enumeration.
+  val foreign_builder = http_routing.builder();
+  ok(foreign_builder.get(rt borrow root, 1));
+  ok(foreign_builder.get(rt borrow users_new, 2));
+  ok(foreign_builder.get(rt borrow users_new_details, 3));
+  ok(foreign_builder.get(rt borrow users_edit, 999));
+  val foreign_router = foreign_builder.build();
+  val foreign_decision = foreign_router.resolve(
+    "GET",
+    http_routing.request_path(arr["users", "someone", "edit"])
+  );
+  stdio.println(router.capture_one(rt borrow foreign_decision, "id").is_none());
+  stdio.println(router.allow_count(rt borrow foreign_decision) == 0);
+  stdio.println(router.allow_method_at(rt borrow foreign_decision, 0).is_none());
+
   return;
 }
