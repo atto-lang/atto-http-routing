@@ -44,7 +44,7 @@ does not attest that the compiler executable was built from the checkout.
 
 `tests/router_semantics.ores` → `tests/expected.txt` keeps the existing
 semantics baseline. The added `tests/router_adversarial.ores` →
-`tests/expected_adversarial.txt` has **89 boolean assertions**, each with
+`tests/expected_adversarial.txt` has **103 boolean assertions**, each with
 expected stdout `true` in declaration order. A false, crash, compiler
 rejection, different line count, or nonzero process exit fails the suite.
 The Rxx comments group the guest assertions as follows:
@@ -60,6 +60,7 @@ The Rxx comments group the guest assertions as follows:
 | R07 | already-decoded `[esc,"/"]`, `[esc,"%2F"]`, `[esc,"%252F"]`, `[esc,"%GG"]` | distinct literal matches 301/302; opaque capture 303 retains exact `%252F`/`%GG` strings; **no second decode or split** | valid guest at decoded boundary, not raw percent validation |
 | R08 | already-decoded `[esc,".."]` | captures `..` unchanged; demonstrates why adapter must reject traversal before routing | **negative security witness; rejection NOT supplied by router** |
 | R09 | same endpoint slot/template in foreign router with changed handler, and out-of-range new-generation Decision | `capture_one=None`, `allow_count=0`, `allow_method_at=None`; valid same-generation captures still succeed | structural guard; **not a router-generation capability** |
+| R10 | empty decoded named-param segment; repeated separators; literal-empty and wildcard routes; path-first POST mismatch | empty named param rejected, literal-empty 603 and wildcard 604 still work, nonempty named path 601/602, POST 405 | pure decoded router only; not raw request validation |
 
 ## Boundary negatives that remain unproven
 
@@ -105,3 +106,14 @@ handler and rejected `set_limits`; builder and previous snapshots retain
 their public route behavior. This hardening prevents future registration
 extensions from introducing partial state updates, but is not an allocator
 fault-injection or out-of-memory atomicity guarantee.
+
+## PR #27 compatibility — empty named segments
+
+Reconciled PR #27's decoded named-parameter semantic change into this PR:
+`param("id")` consumes exactly one **non-empty** segment; `literal("")`
+and terminal `wildcard` retain empty-segment behavior. The
+`decision_matches_router` structural guard applies the same restriction
+to untrusted/foreign decisions, so readback cannot accept a path the matcher
+itself would reject. R10 tests these invariants in the native fixture.
+PR #27 is **not merged**; coordinate independent review and avoid double
+applying the same matcher patch. Native guest execution is still outstanding.
