@@ -83,14 +83,16 @@ stdout, head SHA, tree SHA, and toolchain evidence. CI jobs with
 
 ## Related open reconciliation
 
-PRs #11 and #18 have compiler pin/reconciliation work and must be assessed
-against the exact selected compiler revision before integration. Draft PR #25 originally proposed stale/foreign decision structural guards. This
-branch **reconciles the source-level guards from #25** with the read-only
-preflight registration changes and adds the R09 regression; it does not imply
-#25 is merged, executed, or ready. Avoid merging duplicate changes. A foreign decision must never
-be considered an authorization capability; retain the exact producing router
-generation during dispatch. None of these PRs is accepted on a host-test
-double or a zero-step workflow.
+PRs #11 and #18 have compiler pin/reconciliation work and must be
+assessed against the exact selected compiler revision before integration.
+
+Draft PR #25 originally proposed stale/foreign decision structural guards.
+This branch **reconciles the source-level guards from #25** with the read-only
+registration preflight and adds the R09 regression. This does not imply that
+PR #25 is merged, executed, or ready; avoid merging duplicate changes.
+A foreign decision must never be considered an authorization capability.
+Retain the exact producing router generation during dispatch. Neither PR
+is accepted on a host-test double or a zero-step workflow.
 
 ## Source mutation guarantee
 
