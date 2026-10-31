@@ -27,12 +27,15 @@ if [[ "$1" = --check ]]; then
   test "$2" = --platform=server
   echo "check:$suite" >> "$RUNNER_LOG"
   [[ "${RUNNER_CASE:-}" != check-failure ]] || exit 42
+  if [[ "${RUNNER_CASE:-}" = check-adversarial-failure && "$suite" = router_adversarial ]]; then exit 42; fi
 else
   test "$#" = 2
   test "$1" = --platform=server
   echo "run:$suite" >> "$RUNNER_LOG"
   [[ "${RUNNER_CASE:-}" != runtime-failure ]] || exit 43
-  if [[ "${RUNNER_CASE:-}" = wrong-output ]]; then
+  if [[ "${RUNNER_CASE:-}" = runtime-adversarial-failure && "$suite" = router_adversarial ]]; then exit 43; fi
+  if [[ "${RUNNER_CASE:-}" = wrong-output ||
+        ( "${RUNNER_CASE:-}" = wrong-adversarial-output && "$suite" = router_adversarial ) ]]; then
     echo incorrect
   else
     cat "$RUNNER_PROJECT/tests/$expected"
@@ -58,7 +61,8 @@ git -C "$tmp/source" rev-parse HEAD > "$project/SOURCE_REF"
 export ORESLANG_SOURCE_DIR="$tmp/source"
 bash "$project/scripts/test.sh"
 test "$(cat "$RUNNER_LOG")" = $'check:router_semantics\nrun:router_semantics\ncheck:router_adversarial\nrun:router_adversarial'
-for scenario in check-failure runtime-failure wrong-output; do
+for scenario in check-failure runtime-failure wrong-output \
+  check-adversarial-failure runtime-adversarial-failure wrong-adversarial-output; do
   : > "$RUNNER_LOG"
   if RUNNER_CASE="$scenario" bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
     echo "runner accepted $scenario" >&2
