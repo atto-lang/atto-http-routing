@@ -75,6 +75,33 @@ pub routine main() -> void {
   expect(older.resolve("OPTIONS", http_routing.request_path(arr["a", "fixed"])).is_automatic_options());
   expect(older.resolve("GET", http_routing.request_path(arr["absent"])).is_not_found());
 
+  // Explicit HEAD/OPTIONS beat automatic fallback/synthesis.
+  val explicit_methods = http_routing.builder();
+  expect(explicit_methods.get(rt borrow fixed, 401).is_ok());
+  expect(explicit_methods.head(rt borrow fixed, 402).is_ok());
+  expect(explicit_methods.options(rt borrow fixed, 403).is_ok());
+  val explicit_router = explicit_methods.build();
+  val explicit_head = explicit_router.resolve(
+    "HEAD", http_routing.request_path(arr["a", "fixed"])
+  );
+  expect(explicit_head.handler_id == 402 && explicit_head.suppress_body);
+  val explicit_options = explicit_router.resolve(
+    "OPTIONS", http_routing.request_path(arr["a", "fixed"])
+  );
+  expect(explicit_options.handler_id == 403 && !explicit_options.is_automatic_options());
+
+  // Bounded search exhaustion and path length are distinct from not-found.
+  val bounded_builder = http_routing.builder();
+  expect(bounded_builder.set_limits(2, 2).is_ok());
+  expect(bounded_builder.get(rt borrow fixed, 450).is_ok());
+  val bounded_router = bounded_builder.build();
+  expect(bounded_router.resolve(
+    "GET", http_routing.request_path(arr["a", "fixed"])
+  ).is_limit_exceeded());
+  expect(bounded_router.resolve(
+    "GET", http_routing.request_path(arr["a", "fixed", "extra"])
+  ).is_limit_exceeded());
+
   // R04: trailing and repeated separators remain distinct decoded segments.
   val trailing = older.resolve("GET", http_routing.request_path(arr["a", "fixed", ""]));
   expect(trailing.handler_id == 103);
@@ -98,6 +125,14 @@ pub routine main() -> void {
   ]);
   expect(forward.get(rt borrow repeated_capture, 902).is_err());
   expect(older.route_count() == 5);
+
+  // All rejected registrations leave the mutable builder's compiled
+  // routing behavior unchanged as well as the previously frozen snapshot.
+  val after_rejections = forward.build();
+  expect(after_rejections.route_count() == 5);
+  expect(after_rejections.resolve(
+    "GET", http_routing.request_path(arr["a", "fixed"])
+  ).handler_id == 101);
 
   // R06: detach snapshot from later route/policy changes; retain captures.
   // Decision owns a request-path copy and remains usable across rebuilds.
