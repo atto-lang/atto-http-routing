@@ -35,10 +35,20 @@ The router itself receives only the Array<String> of path segments.
 
 ## Validation before routing
 
-A production adapter should reject malformed percent escapes, NUL/control
-characters, and invalid request-target encodings before constructing
-RequestPath. Backslash handling should be explicit rather than platform
-dependent.
+A production adapter MUST reject malformed percent escapes, NUL/control
+characters, invalid request-target encodings and traversal-ambiguous dot
+segments (including percent-encoded variants) **before** constructing
+RequestPath. Backslash and mixed-separator handling must be explicit rather
+than platform dependent. Preserve decoded slash bytes inside one segment; do
+not normalize or re-split them. A decoded segment such as `%GG` may be the
+valid result of raw `%25GG`, so the router cannot infer malformed raw input.
+Rejecting literal `.`/`..` in any filesystem-backed route may also require
+application-specific authorization and normalization policy.
+
+The pure router intentionally does not validate raw request-targets: a
+`request_path(arr["a", ".."])` value can be captured as-is. Adapters must
+not treat successful route matching as validation or authorization. See
+[issue #22's boundary matrix](ISSUE_22_ACCEPTANCE.md).
 
 The router's max_segments and max_match_steps limits are a second defensive
 boundary, not a substitute for protocol parsing limits.
