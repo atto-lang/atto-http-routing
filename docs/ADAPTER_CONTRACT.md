@@ -87,3 +87,13 @@ A dispatcher must not send a Decision, PathCapture, or Router object to an
 isolated actor. Extract immutable scalar strings and place them in the actor's
 request capability before transferring it. Keep handler objects in the host
 adapter's registry; routing metadata contains only scalar IDs and operation names.
+
+## Decision provenance and generation scope
+
+A `Decision` is not a capability or unforgeable generation ID. Inspector
+methods validate endpoint range, route template, path shape and associated
+target metadata before returning captures or Allow entries. These checks
+protect against accidental stale/foreign decisions with inconsistent metadata.
+They do **not** authorize dispatch or prove snapshot identity. Always keep the
+producing router generation attached to the in-flight request and resolve
+handler authorization from its generation-scoped registry.
