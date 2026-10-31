@@ -48,3 +48,39 @@ cd "$repo_root"
 
 diff -u "$repo_root/tests/expected.txt" "$actual"
 echo "router semantics: PASS"
+
+# The edge matrix is intentionally separate from the legacy monolithic
+# semantics guest. Enforce paired, non-symlink fixtures before running any
+# new guest so tests cannot silently disappear or escape the checkout.
+edge_dir="$repo_root/tests/edge_cases"
+[[ -d "$edge_dir" && ! -L "$edge_dir" ]] || {
+  echo "unsafe or missing router edge fixture directory" >&2
+  exit 65
+}
+shopt -s nullglob
+edge_sources=("$edge_dir"/*.ores)
+edge_expected=("$edge_dir"/*.expected)
+(( ${#edge_sources[@]} >= 3 && ${#edge_sources[@]} == ${#edge_expected[@]} )) || {
+  echo "incomplete router edge fixture inventory" >&2
+  exit 65
+}
+for source in "${edge_sources[@]}"; do
+  expected="${source%.ores}.expected"
+  [[ -f "$source" && ! -L "$source" && -f "$expected" && ! -L "$expected" && -s "$expected" ]] || {
+    echo "missing, unsafe or empty router edge fixture: $source" >&2
+    exit 65
+  }
+done
+for expected in "${edge_expected[@]}"; do
+  [[ -f "${expected%.expected}.ores" && ! -L "${expected%.expected}.ores" ]] || {
+    echo "orphan router edge expectation: $expected" >&2
+    exit 65
+  }
+done
+for source in "${edge_sources[@]}"; do
+  expected="${source%.ores}.expected"
+  "$compiler" --check --platform=server "$source"
+  "$compiler" --platform=server "$source" > "$actual"
+  diff -u "$expected" "$actual"
+  echo "router edge: $(basename "$source") PASS"
+done
