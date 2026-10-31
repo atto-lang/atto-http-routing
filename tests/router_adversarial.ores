@@ -195,5 +195,33 @@ pub routine main() -> void {
   val traversal_witness = escaped_router.resolve("GET", http_routing.request_path(arr["esc", ".."]));
   expect(traversal_witness.handler_id == 303);
   expect(escaped_router.capture_one(rt borrow traversal_witness, "value").unwrap() == "..");
+
+  // R09: PR #25 reconciliation. A Decision is not a transferable capability:
+  // an identical endpoint slot/template from a foreign router cannot read
+  // captures/Allow when the handler metadata differs.
+  val foreign_builder = http_routing.builder();
+  expect(foreign_builder.get(rt borrow fixed, 991).is_ok());
+  expect(foreign_builder.get(rt borrow parameter, 992).is_ok());
+  val foreign_router = foreign_builder.build();
+  val foreign_param = foreign_router.resolve(
+    "GET", http_routing.request_path(arr["a", "visitor"])
+  );
+  expect(foreign_param.endpoint_index == 1);
+  expect(older.capture_one(rt borrow foreign_param, "id").is_none());
+  expect(older.allow_count(rt borrow foreign_param) == 0);
+  expect(older.allow_method_at(rt borrow foreign_param, 0).is_none());
+
+  // Out-of-range generation index must fail closed, not throw.
+  val later_decision = newer.resolve(
+    "GET", http_routing.request_path(arr["later"])
+  );
+  expect(later_decision.endpoint_index == 5);
+  expect(older.capture_one(rt borrow later_decision, "id").is_none());
+  expect(older.allow_count(rt borrow later_decision) == 0);
+  expect(older.allow_method_at(rt borrow later_decision, 0).is_none());
+
+  // A legitimate decision from the producing immutable router still works.
+  val legitimate = older.resolve("GET", http_routing.request_path(arr["a", "visitor"]));
+  expect(older.capture_one(rt borrow legitimate, "id").unwrap() == "visitor");
   return;
 }
