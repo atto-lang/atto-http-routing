@@ -77,3 +77,21 @@ A dispatcher must not send a Decision, PathCapture, or Router object to an
 isolated actor. Extract immutable scalar strings and place them in the actor's
 request capability before transferring it. Keep handler objects in the host
 adapter's registry; routing metadata contains only scalar IDs and operation names.
+
+## Decision provenance and generation scope
+
+A `Decision` is a routing result, **not** a proof of authority or a
+generation-stable handle. Keep it together with the exact immutable `Router`
+snapshot that produced it. Do not pass a decision from one router generation to
+another (including hot-reload replacements), and do not accept a
+caller-constructed `Decision` as an authorization signal.
+
+The router now checks a decision's endpoint range, route template, bound handler
+metadata, and path shape before `capture`, `capture_one`, `allow_count`,
+and `allow_method_at` dereference route data. Invalid decisions fail closed:
+captures/Allow entries are `None` and the Allow count is zero. These checks
+prevent accidental stale or mismatched data access; they are **not**
+cryptographic or unforgeable router-generation attestation. The adapter must
+derive authorization solely from its own generation-scoped route/handler
+registry and request capability. In-flight requests must retain their original
+router snapshot until dispatch completes.
