@@ -47,6 +47,10 @@ The search is bounded by max_match_steps and path length is bounded by
 max_segments. A limit failure is a separate Decision state so an adapter can
 map it to its chosen HTTP policy without confusing it with a genuine 404.
 
+Named parameters match exactly one **non-empty** decoded path segment. They
+cannot consume an empty segment from a trailing or repeated separator; an
+explicit `literal("")` or a terminal wildcard can match that segment.
+
 Wildcards are terminal. They can match zero or more remaining path segments.
 
 ## Path-first method semantics

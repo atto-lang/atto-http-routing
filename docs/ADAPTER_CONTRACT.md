@@ -31,7 +31,10 @@ Canonical examples:
 - '/users/' -> ['users', '']
 - '/a//b' -> ['a', '', 'b']
 
-The router itself receives only the Array<String> of path segments.
+The router itself receives only the Array<String> of path segments. Empty
+segments must be preserved, but named `param(...)` edges will not match them.
+Register `literal("")` to require an empty segment or a terminal wildcard for
+catch-all behavior; do not substitute invented values for empty segments.
 
 ## Validation before routing
 
