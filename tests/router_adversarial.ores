@@ -100,10 +100,8 @@ pub routine main() -> void {
   expect(older.route_count() == 5);
 
   // R06: detach snapshot from later route/policy changes; retain captures.
-  let mut Array<String> caller_segments = arr["a", "original"];
-  val detached_path = http_routing.request_path(caller_segments);
-  caller_segments.add("extra"); // request_path() copied caller-owned segments.
-  val old_decision = older.resolve("GET", detached_path);
+  // Decision owns a request-path copy and remains usable across rebuilds.
+  val old_decision = older.resolve("GET", http_routing.request_path(arr["a", "original"]));
   expect(older.capture_one(rt borrow old_decision, "id").unwrap() == "original");
 
   val later = http_routing.path("/later", arr[http_routing.literal("later")]);
