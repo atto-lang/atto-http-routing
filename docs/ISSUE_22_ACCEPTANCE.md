@@ -39,7 +39,7 @@ The Rxx comments group the guest assertions as follows:
 | R03 | `POST /a/fixed` when param route permits POST; `POST /a/x`; HEAD, OPTIONS, unknown | 405 (no method fallback), handler 106, HEAD via GET with body suppression, automatic OPTIONS, 404 | valid guest with expected negative decisions |
 | R04 | `[a,fixed,""]` and `[a,"",x]` | wildcard 103; trailing and repeated empty segment retained in capture | valid guest; **no automatic slash collapse** |
 | R05 | duplicate GET, alternate param name, alternate wildcard name, duplicate capture | `Err` on each; existing snapshot route count unchanged | valid guest with negative registrations |
-| R06 | mutate caller segment array; append route and toggle HEAD/OPTIONS after build | owned input and old captures intact; old snapshot unchanged; new snapshot sees route 120 and disabled method synthesis | valid guest; **no concurrent actors exercised** |
+| R06 | retain an old captured Decision; append route and toggle HEAD/OPTIONS after build | old captures intact; old snapshot unchanged; new snapshot sees route 120 and disabled method synthesis | valid guest; **no concurrent actors exercised** |
 | R07 | already-decoded `[esc,"/"]`, `[esc,"%2F"]`, `[esc,"%252F"]`, `[esc,"%GG"]` | distinct literal matches 301/302; opaque capture 303 retains exact `%252F`/`%GG` strings; **no second decode or split** | valid guest at decoded boundary, not raw percent validation |
 | R08 | already-decoded `[esc,".."]` | captures `..` unchanged; demonstrates why adapter must reject traversal before routing | **negative security witness; rejection NOT supplied by router** |
 
