@@ -624,8 +624,10 @@ define module http_routing as
         fi
       fi
 
+      // Named parameters consume one non-empty decoded segment. Empty
+      // segments stay available to literal("") and terminal wildcards.
       val int parameter_child = self.node_param_child.get(node_index);
-      if parameter_child >= 0; then
+      if parameter_child >= 0 && current_segment != ""; then
         val int parameter_match = self.match_node(
           parameter_child,
           segment_index + 1,
@@ -797,6 +799,11 @@ define module http_routing as
           return false;
         fi
         if segment.kind == 0 && segment.value != decision.path().segment_at(request_index); then
+          return false;
+        fi
+        // The decision inspector must enforce the same named-parameter
+        // semantics as match_node, including on foreign/caller decisions.
+        if segment.kind == 1 && decision.path().segment_at(request_index) == ""; then
           return false;
         fi
         request_index = request_index + 1;
