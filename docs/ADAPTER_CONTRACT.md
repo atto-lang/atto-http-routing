@@ -31,7 +31,9 @@ Canonical examples:
 - '/users/' -> ['users', '']
 - '/a//b' -> ['a', '', 'b']
 
-The router itself receives only the Array<String> of path segments.
+The router itself receives only the Array<String> of path segments. Empty segments remain
+significant: named `param(...)` edges require a non-empty segment, whereas
+`literal("")` and terminal wildcards may match empty segments.
 
 ## Validation before routing
 
