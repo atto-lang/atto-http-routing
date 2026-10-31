@@ -44,7 +44,7 @@ does not attest that the compiler executable was built from the checkout.
 
 `tests/router_semantics.ores` → `tests/expected.txt` keeps the existing
 semantics baseline. The added `tests/router_adversarial.ores` →
-`tests/expected_adversarial.txt` has **78 boolean assertions**, each with
+`tests/expected_adversarial.txt` has **89 boolean assertions**, each with
 expected stdout `true` in declaration order. A false, crash, compiler
 rejection, different line count, or nonzero process exit fails the suite.
 The Rxx comments group the guest assertions as follows:
@@ -59,6 +59,7 @@ The Rxx comments group the guest assertions as follows:
 | R06 | retain an old captured Decision; append route and toggle HEAD/OPTIONS after build | old captures intact; old snapshot unchanged; new snapshot sees route 120 and disabled method synthesis | valid guest; **no concurrent actors exercised** |
 | R07 | already-decoded `[esc,"/"]`, `[esc,"%2F"]`, `[esc,"%252F"]`, `[esc,"%GG"]` | distinct literal matches 301/302; opaque capture 303 retains exact `%252F`/`%GG` strings; **no second decode or split** | valid guest at decoded boundary, not raw percent validation |
 | R08 | already-decoded `[esc,".."]` | captures `..` unchanged; demonstrates why adapter must reject traversal before routing | **negative security witness; rejection NOT supplied by router** |
+| R09 | same endpoint slot/template in foreign router with changed handler, and out-of-range new-generation Decision | `capture_one=None`, `allow_count=0`, `allow_method_at=None`; valid same-generation captures still succeed | structural guard; **not a router-generation capability** |
 
 ## Boundary negatives that remain unproven
 
@@ -83,9 +84,22 @@ stdout, head SHA, tree SHA, and toolchain evidence. CI jobs with
 ## Related open reconciliation
 
 PRs #11 and #18 have compiler pin/reconciliation work and must be assessed
-against the exact selected compiler revision before integration. Draft PR #25
-hardens stale/foreign decisions but is **not merged**; this test-only branch
-does not include or attest its source changes. A foreign decision must never
+against the exact selected compiler revision before integration. Draft PR #25 originally proposed stale/foreign decision structural guards. This
+branch **reconciles the source-level guards from #25** with the read-only
+preflight registration changes and adds the R09 regression; it does not imply
+#25 is merged, executed, or ready. Avoid merging duplicate changes. A foreign decision must never
 be considered an authorization capability; retain the exact producing router
 generation during dispatch. None of these PRs is accepted on a host-test
 double or a zero-step workflow.
+
+## Source mutation guarantee
+
+`RouterBuilder.route()` now checks existing trie edges, endpoint canonical
+identities and duplicate method targets in a **read-only preflight** before
+entering its mutation phase. Registration `Err` outcomes therefore occur
+before any trie/endpoint mutation for documented admission failures. The
+negative tests cover duplicate/canonical-name/method conflicts, invalid
+handler and rejected `set_limits`; builder and previous snapshots retain
+their public route behavior. This hardening prevents future registration
+extensions from introducing partial state updates, but is not an allocator
+fault-injection or out-of-memory atomicity guarantee.
