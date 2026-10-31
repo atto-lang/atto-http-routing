@@ -154,6 +154,37 @@ pub routine main() -> void {
   );
   stdio.println(limited_builder.get(rt borrow users_edit, 201).is_err());
 
+  // Method rejection is scoped to the most-specific PATH, even when a
+  // broader parameter route supports the method. It must not fall through.
+  val items_literal = http_routing.path("/items/new", arr[
+    http_routing.literal("items"),
+    http_routing.literal("new")
+  ]);
+  val items_parameter = http_routing.path("/items/{id}", arr[
+    http_routing.literal("items"),
+    http_routing.param("id")
+  ]);
+  val method_builder = http_routing.builder();
+  ok(method_builder.get(rt borrow items_literal, 700));
+  ok(method_builder.post(rt borrow items_parameter, 701));
+  val method_router = method_builder.build();
+  val method_rejection = method_router.resolve(
+    "POST",
+    http_routing.request_path(arr["items", "new"])
+  );
+  stdio.println(method_rejection.is_method_not_allowed());
+  stdio.println(method_router.allow_count(rt borrow method_rejection) == 3);
+
+  // With enough path segments but insufficient search steps, never report 404
+  // or a partial match: the result must be a distinct fail-closed limit state.
+  val budget_builder = http_routing.builder();
+  ok(budget_builder.set_limits(2, 2));
+  ok(budget_builder.get(rt borrow users_new, 702));
+  val budget_router = budget_builder.build();
+  stdio.println(
+    budget_router.resolve("GET", http_routing.request_path(arr["users", "new"])).is_limit_exceeded()
+  );
+
   // Cross-router decisions are not capabilities. Even if a different router
   // assigns the same endpoint slot/template, changed handler metadata must
   // not be used for capture extraction or Allow enumeration.
