@@ -747,8 +747,65 @@ define module http_routing as
       );
     }
 
+    // Decision values are data, not capabilities. Accessors must not trust
+    // an endpoint index originating in another router generation (or supplied
+    // directly by a caller). Validate before indexing any endpoint/target.
+    // This is a structural guard, not an unforgeable generation identity.
+    decision_matches_router(borrow Decision decision) -> bool {
+      if decision.kind != 0 && decision.kind != 2 && decision.kind != 3; then
+        return false;
+      fi
+      if decision.endpoint_index < 0 || decision.endpoint_index >= self.endpoints.size; then
+        return false;
+      fi
+      if decision.path().size() > self.max_segments_value; then
+        return false;
+      fi
+
+      val Endpoint endpoint = self.endpoints.get(decision.endpoint_index);
+      if decision.route_template != endpoint.template(); then
+        return false;
+      fi
+
+      if decision.kind == 0; then
+        if decision.target_index < 0 || decision.target_index >= endpoint.target_count(); then
+          return false;
+        fi
+        val RouteTarget target = endpoint.target_at(decision.target_index);
+        if decision.handler_id != target.handler_id ||
+           decision.pipeline_id != target.pipeline_id ||
+           decision.contract_id != target.contract_id ||
+           decision.operation_id != target.operation_id; then
+          return false;
+        fi
+      else
+        if decision.target_index != -1 || decision.handler_id != -1 ||
+           decision.pipeline_id != -1 || decision.contract_id != -1 ||
+           decision.operation_id != ""; then
+          return false;
+        fi
+      fi
+
+      let int request_index = 0;
+      for (let int pattern_index = 0; pattern_index < endpoint.pattern().size(); pattern_index = pattern_index + 1) {
+        val PathSegment segment = endpoint.pattern().segment_at(pattern_index);
+        if segment.kind == 2; then
+          // Registered wildcards are terminal and may capture zero segments.
+          return true;
+        fi
+        if request_index >= decision.path().size(); then
+          return false;
+        fi
+        if segment.kind == 0 && segment.value != decision.path().segment_at(request_index); then
+          return false;
+        fi
+        request_index = request_index + 1;
+      }
+      return request_index == decision.path().size();
+    }
+
     pub capture(borrow Decision decision, String name) -> Option<PathCapture> {
-      if decision.endpoint_index < 0; then
+      if !self.decision_matches_router(decision); then
         return None;
       fi
 
@@ -789,7 +846,7 @@ define module http_routing as
     }
 
     pub allow_count(borrow Decision decision) -> int {
-      if decision.endpoint_index < 0; then
+      if !self.decision_matches_router(decision); then
         return 0;
       fi
 
@@ -808,7 +865,7 @@ define module http_routing as
     }
 
     pub allow_method_at(borrow Decision decision, int requested_index) -> Option<String> {
-      if decision.endpoint_index < 0 || requested_index < 0; then
+      if requested_index < 0 || !self.decision_matches_router(decision); then
         return None;
       fi
 
