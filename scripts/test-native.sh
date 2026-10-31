@@ -20,7 +20,11 @@ if [[ "$actual_ref" != "$expected_ref" ]]; then
   echo "wrong compiler source: actual=$actual_ref expected=$expected_ref" >&2
   exit 65
 fi
-if [[ -n "$(git -C "$source_dir" status --porcelain --untracked-files=all)" ]]; then
+source_status="$(git -C "$source_dir" status --porcelain --untracked-files=all)" || {
+  echo "cannot inspect compiler checkout status" >&2
+  exit 65
+}
+if [[ -n "$source_status" ]]; then
   echo "compiler checkout is dirty; refusing native acceptance" >&2
   exit 65
 fi
