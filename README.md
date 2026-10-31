@@ -135,9 +135,12 @@ The baseline suite covers precedence/backtracking, captures, wildcard behavior,
 404/405, Allow synthesis, HEAD/OPTIONS, metadata, strict slash behavior,
 builder snapshot isolation, registration conflicts, and routing limits.
 The separate [issue #22 adversarial matrix](docs/ISSUE_22_ACCEPTANCE.md)
-adds forward/reverse insertion metamorphic checks, decoded-segment edge
-cases, and mutation-after-build regression tests; `scripts/test.sh` runs
-**both** native guest fixtures against the exact compiler source pin.
+adds 89 deterministic assertions: forward/reverse insertion oracles,
+decoded-segment edge cases, mutation-after-build, and foreign-generation
+inspection rejection. `RouterBuilder.route()` preflights conflicts before
+mutation; decision inspectors reject structurally inconsistent foreign and
+stale routing decisions (not an unforgeable capability). `scripts/test.sh`
+runs **both** native guest fixtures against the exact compiler source pin.
 A passing host runner double or zero-step Actions job is not guest evidence.
 
 The pinned compiler revision is the native-collections feature stack plus the mandatory module-`as` parser integration,
