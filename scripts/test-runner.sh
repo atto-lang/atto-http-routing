@@ -180,4 +180,48 @@ test ! -s "$RUNNER_LOG"
 rm "$project/scripts/bounded_process.py"
 mv "$tmp/saved-bounded" "$project/scripts/bounded_process.py"
 
+# Zero-byte guest files are not legitimate executable fixtures, even with
+# a matching nonempty oracle, and must fail before mock compiler dispatch.
+: > "$RUNNER_LOG"
+mv "$project/tests/edge_cases/head-options.ores" "$tmp/saved-edge-source"
+: > "$project/tests/edge_cases/head-options.ores"
+if bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
+  echo "empty edge guest accepted" >&2; exit 1
+fi
+grep -q "missing, unsafe or empty router edge fixture" "$tmp/output"
+test ! -s "$RUNNER_LOG"
+rm "$project/tests/edge_cases/head-options.ores"
+mv "$tmp/saved-edge-source" "$project/tests/edge_cases/head-options.ores"
+
+: > "$RUNNER_LOG"
+mv "$project/tests/router_semantics.ores" "$tmp/saved-legacy-source"
+: > "$project/tests/router_semantics.ores"
+if bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
+  echo "empty legacy guest accepted" >&2; exit 1
+fi
+grep -q "unsafe or missing router legacy fixture" "$tmp/output"
+test ! -s "$RUNNER_LOG"
+rm "$project/tests/router_semantics.ores"
+mv "$tmp/saved-legacy-source" "$project/tests/router_semantics.ores"
+
+: > "$RUNNER_LOG"
+mv "$project/tests/edge_cases/head-options.expected" "$tmp/saved-edge-output"
+: > "$project/tests/edge_cases/head-options.expected"
+if bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
+  echo "empty edge expectation accepted" >&2; exit 1
+fi
+grep -q "missing, unsafe or empty router edge fixture" "$tmp/output"
+test ! -s "$RUNNER_LOG"
+rm "$project/tests/edge_cases/head-options.expected"
+mv "$tmp/saved-edge-output" "$project/tests/edge_cases/head-options.expected"
+
+: > "$RUNNER_LOG"
+mv "$project/scripts/run-guest.py" "$tmp/saved-helper"
+if bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
+  echo "missing bounded runner accepted" >&2; exit 1
+fi
+grep -q "unsafe or missing bounded guest runner" "$tmp/output"
+test ! -s "$RUNNER_LOG"
+mv "$tmp/saved-helper" "$project/scripts/run-guest.py"
+
 echo "runner contracts: PASS"
