@@ -60,6 +60,56 @@ class BackendChecks(unittest.TestCase):
     def test_symlink_escape_rejected(self):
         (self.root/'escape').symlink_to('/etc/hosts')
         with self.assertRaises(RuntimeError): checker.local_file('escape')
+    def test_in_repository_symlink_file_is_rejected(self):
+        (self.root/'linked.ores').symlink_to(self.root/'probe.ores')
+        with self.assertRaisesRegex(RuntimeError, 'Symlinked contract path'):
+            checker.local_file('linked.ores')
+
+    def test_in_repository_symlink_parent_is_rejected(self):
+        (self.root/'real').mkdir()
+        (self.root/'real'/'probe.ores').write_text('valid')
+        (self.root/'alias').symlink_to(self.root/'real', target_is_directory=True)
+        with self.assertRaisesRegex(RuntimeError, 'Symlinked contract path'):
+            checker.local_file('alias/probe.ores')
+
+    def test_parent_traversal_even_when_normalized_inside_is_rejected(self):
+        (self.root/'sub').mkdir()
+        for candidate in ('sub/../probe.ores', 'sub/../../probe.ores', ''):
+            with self.subTest(candidate=candidate), self.assertRaises(RuntimeError):
+                checker.local_file(candidate)
+
+    def test_symlinked_backend_contract_file_is_rejected(self):
+        self.load()
+        actual = self.root/'BACKENDS.json'
+        actual.rename(self.root/'saved-contract.json')
+        actual.symlink_to(self.root/'saved-contract.json')
+        with self.assertRaisesRegex(RuntimeError, 'Symlinked contract path'):
+            checker.load_contract()
+
+    def test_symlinked_compiler_pin_is_rejected(self):
+        compiler = self.root/'source'
+        compiler.mkdir()
+        def git(*args):
+            return subprocess.check_output(['git','-C',str(compiler),*args],text=True).strip()
+        git('init','-q')
+        (compiler/'tracked').write_text('source')
+        git('add','tracked')
+        git('-c','user.name=Test','-c','user.email=test@example.invalid','commit','-qm','source')
+        (self.root/'pinned-sha').write_text(git('rev-parse','HEAD'))
+        (self.root/'SOURCE_REF').symlink_to(self.root/'pinned-sha')
+        with patch.dict(os.environ, {'BACKEND_TEST_SOURCE':str(compiler)}):
+            with self.assertRaisesRegex(RuntimeError, 'Symlinked contract path'):
+                checker.require_source('BACKEND_TEST_SOURCE', 'SOURCE_REF')
+
+    def test_symlinked_compiler_checkout_is_rejected(self):
+        compiler = self.root/'source'
+        compiler.mkdir()
+        (self.root/'source-link').symlink_to(compiler, target_is_directory=True)
+        (self.root/'SOURCE_REF').write_text('0'*40)
+        with patch.dict(os.environ, {'BACKEND_TEST_SOURCE':str(self.root/'source-link')}):
+            with self.assertRaisesRegex(RuntimeError, 'Compiler checkout path must not be a symlink'):
+                checker.require_source('BACKEND_TEST_SOURCE', 'SOURCE_REF')
+
     def test_changed_execution_status_rejected(self):
         self.contract['llvm']['execution'] = 'supported'
         with self.assertRaises(RuntimeError): self.load()
