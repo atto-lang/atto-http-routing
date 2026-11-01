@@ -203,7 +203,7 @@ class CompilerLauncherContracts(unittest.TestCase):
         ).strip()
         # The compiler's target/ output is generated/ignored, not untracked
         # source. Ensure source cleanliness checks still catch other changes.
-        (self.source/'.git/info/exclude').write_text('target/\\n')
+        (self.source/'.git/info/exclude').write_text('target/\n')
         (self.root/'SOURCE_REF').write_text(self.commit + '\n')
         self.classes = self.source/'target/classes'
         self.main_class = self.classes/'dev/oreslang/launcher/OresMain.class'
