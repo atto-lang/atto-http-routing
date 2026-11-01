@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Negative contracts for backend admission; never substitutes for package tests."""
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -13,6 +14,9 @@ sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location('checker', Path(__file__).with_name('check-backend.py'))
 checker = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(checker)
+guest_spec = importlib.util.spec_from_file_location('guest_runner', Path(__file__).with_name('run-guest.py'))
+guest_runner = importlib.util.module_from_spec(guest_spec)
+guest_spec.loader.exec_module(guest_runner)
 
 class BackendChecks(unittest.TestCase):
     def setUp(self):
@@ -295,5 +299,70 @@ class CompilerLauncherContracts(unittest.TestCase):
         pin.rename(self.root/'saved-pin')
         pin.symlink_to(self.root/'saved-pin')
         self.assert_no_java(self.execute(), 'SOURCE_REF is missing or is a symlink')
+
+class GuestProcessAdmission(unittest.TestCase):
+    """Executed host subprocess tests: no Oreslang guest semantics implied."""
+
+    def run_guest(self, args, *, timeout=2, max_bytes=32768):
+        with patch.object(guest_runner, 'TIMEOUT_SECONDS', timeout), \
+             patch.object(guest_runner, 'MAX_OUTPUT_BYTES', max_bytes), \
+             patch.object(sys, 'argv', ['run-guest.py', *args]), \
+             patch('sys.stdout', new_callable=io.StringIO) as stdout, \
+             patch('sys.stderr', new_callable=io.StringIO) as stderr:
+            code = guest_runner.main()
+            return code, stdout.getvalue(), stderr.getvalue()
+
+    def test_missing_compiler_arguments_rejected(self):
+        code, stdout, stderr = self.run_guest([])
+        self.assertEqual(code, 64)
+        self.assertEqual(stdout, '')
+        self.assertIn('usage:', stderr)
+
+    def test_host_stdout_and_stderr_preserved(self):
+        program = "import sys;print('output');print('diagnostic',file=sys.stderr)"
+        code, stdout, stderr = self.run_guest([sys.executable, '-c', program])
+        self.assertEqual((code, stdout, stderr), (0, 'output\\n', 'diagnostic\\n'))
+
+    def test_nonzero_exit_preserved_without_false_pass(self):
+        code, stdout, stderr = self.run_guest(
+            [sys.executable, '-c', "import sys;print('invalid',file=sys.stderr);sys.exit(17)"]
+        )
+        self.assertEqual((code, stdout, stderr), (17, '', 'invalid\\n'))
+
+    def test_stdout_budget_overflow_rejects_all_partial_output(self):
+        code, stdout, stderr = self.run_guest(
+            [sys.executable, '-c', "import os;os.write(1,b'A'*200000)"],
+            max_bytes=4096
+        )
+        self.assertEqual(code, 70)
+        self.assertEqual(stdout, '')
+        self.assertIn('budget exceeded', stderr)
+
+    def test_stderr_budget_overflow_rejects_all_partial_output(self):
+        code, stdout, stderr = self.run_guest(
+            [sys.executable, '-c', "import os;os.write(2,b'B'*200000)"],
+            max_bytes=4096
+        )
+        self.assertEqual(code, 70)
+        self.assertEqual(stdout, '')
+        self.assertIn('budget exceeded', stderr)
+
+    def test_timeout_rejects_guest_without_partial_success(self):
+        code, stdout, stderr = self.run_guest(
+            [sys.executable, '-c', "import time;time.sleep(3)"],
+            timeout=0.1
+        )
+        self.assertEqual(code, 124)
+        self.assertEqual(stdout, '')
+        self.assertIn('process timeout', stderr)
+
+    def test_non_utf8_output_is_never_treated_as_diagnostic_success(self):
+        code, stdout, stderr = self.run_guest(
+            [sys.executable, '-c', "import os;os.write(1,bytes([255]))"]
+        )
+        self.assertEqual(code, 70)
+        self.assertEqual(stdout, '')
+        self.assertIn('UnicodeDecodeError', stderr)
+
 
 if __name__ == '__main__': unittest.main()
