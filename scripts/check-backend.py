@@ -18,8 +18,11 @@ def require_source(variable, pin):
     raw = os.environ.get(variable)
     if not raw:
         raise RuntimeError(f'Set {variable} to the pinned compiler checkout')
-    source = Path(raw).resolve()
-    expected = (ROOT / pin).read_text().strip()
+    source_input = Path(raw)
+    if source_input.is_symlink():
+        raise RuntimeError('Compiler checkout path must not be a symlink')
+    source = source_input.resolve()
+    expected = local_file(pin).read_text().strip()
     if not re.fullmatch('[0-9a-f]{40}', expected):
         raise RuntimeError(f'Invalid {pin}')
     if Path(git(source, 'rev-parse', '--show-toplevel')).resolve() != source:
@@ -31,15 +34,26 @@ def require_source(variable, pin):
     return source
 
 def local_file(relative):
-    if not isinstance(relative, str) or Path(relative).is_absolute():
-        raise RuntimeError('Contract paths must be relative to this repository')
-    path = (ROOT / relative).resolve()
-    if ROOT.resolve() not in path.parents or not path.is_file():
+    if not isinstance(relative, str) or not relative:
+        raise RuntimeError('Contract path must be a nonempty string')
+    requested = Path(relative)
+    if requested.is_absolute() or '..' in requested.parts:
+        raise RuntimeError('Contract paths must be relative and cannot traverse parents')
+    path = ROOT
+    # Explicitly reject symlinks at EVERY component, even when the link
+    # resolves to an otherwise allowed in-repository file/directory.
+    for component in requested.parts:
+        path = path / component
+        if path.is_symlink():
+            raise RuntimeError(f'Symlinked contract path is forbidden: {relative}')
+    root = ROOT.resolve()
+    resolved = path.resolve()
+    if root not in resolved.parents or not resolved.is_file():
         raise RuntimeError(f'Missing or outside-repository contract file: {relative}')
-    return path
+    return resolved
 
 def load_contract():
-    contract = json.loads((ROOT / 'BACKENDS.json').read_text())
+    contract = json.loads(local_file('BACKENDS.json').read_text())
     if not isinstance(contract, dict) or set(contract) != {'java', 'llvm'}:
         raise RuntimeError('Expected java and llvm backend contracts')
     java, llvm = contract['java'], contract['llvm']
