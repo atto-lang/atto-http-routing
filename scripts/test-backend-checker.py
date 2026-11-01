@@ -365,4 +365,44 @@ class GuestProcessAdmission(unittest.TestCase):
         self.assertIn('UnicodeDecodeError', stderr)
 
 
+    def test_leaked_descendant_holding_pipe_is_rejected(self):
+        program = (
+            "import subprocess,sys;"
+            "subprocess.Popen([sys.executable,'-c','import time;time.sleep(30)']);"
+            "print('not trusted')"
+        )
+        code, stdout, stderr = self.run_guest(
+            [sys.executable, '-c', program], timeout=3
+        )
+        self.assertEqual(code, 70)
+        self.assertEqual(stdout, '')
+        self.assertIn('pipes remained open', stderr)
+
+    def test_timeout_kills_descendant_process_group(self):
+        program = (
+            "import subprocess,sys,time;"
+            "subprocess.Popen([sys.executable,'-c','import time;time.sleep(30)']);"
+            "time.sleep(30)"
+        )
+        code, stdout, stderr = self.run_guest(
+            [sys.executable, '-c', program], timeout=0.1
+        )
+        self.assertEqual(code, 124)
+        self.assertEqual(stdout, '')
+        self.assertIn('process timeout', stderr)
+
+    def test_descendant_output_flood_is_not_partial_success(self):
+        program = (
+            "import subprocess,sys;"
+            "subprocess.run([sys.executable,'-c',"
+            "\"import os;os.write(1,b'X'*500000)\"])"
+        )
+        code, stdout, stderr = self.run_guest(
+            [sys.executable, '-c', program], timeout=3, max_bytes=1024
+        )
+        self.assertEqual(code, 70)
+        self.assertEqual(stdout, '')
+        self.assertIn('budget exceeded', stderr)
+
+
 if __name__ == '__main__': unittest.main()
