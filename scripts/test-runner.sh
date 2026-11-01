@@ -7,6 +7,8 @@ trap 'rm -rf "$tmp"' EXIT
 project="$tmp/project with spaces"
 mkdir -p "$project/scripts" "$project/tests/edge_cases" "$tmp/bin"
 cp "$root/scripts/test.sh" "$project/scripts/test.sh"
+cp "$root/scripts/run-guest.py" "$project/scripts/run-guest.py"
+cp "$root/scripts/bounded_process.py" "$project/scripts/bounded_process.py"
 cp "$root/SOURCE_REF" "$project/SOURCE_REF"
 cp "$root/tests/expected.txt" "$project/tests/expected.txt"
 cp "$root/tests/router_semantics.ores" "$project/tests/router_semantics.ores"
@@ -152,4 +154,30 @@ grep -q "SOURCE_REF must be a regular non-symlink file" "$tmp/output"
 test ! -s "$RUNNER_LOG"
 rm "$project/SOURCE_REF"
 mv "$tmp/saved-pin" "$project/SOURCE_REF"
+# Bounded helper is a trusted executable input; a symlink is never a safe
+# substitute, even when it points at a nominally identical script.
+: > "$RUNNER_LOG"
+mv "$project/scripts/run-guest.py" "$tmp/saved-run-guest"
+ln -s "$tmp/saved-run-guest" "$project/scripts/run-guest.py"
+if bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
+  echo "symlinked bounded runner accepted" >&2
+  exit 1
+fi
+grep -q "unsafe or missing bounded guest runner" "$tmp/output"
+test ! -s "$RUNNER_LOG"
+rm "$project/scripts/run-guest.py"
+mv "$tmp/saved-run-guest" "$project/scripts/run-guest.py"
+
+: > "$RUNNER_LOG"
+mv "$project/scripts/bounded_process.py" "$tmp/saved-bounded"
+ln -s "$tmp/saved-bounded" "$project/scripts/bounded_process.py"
+if bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
+  echo "symlinked bounded helper accepted" >&2
+  exit 1
+fi
+grep -q "unsafe or missing bounded guest runner" "$tmp/output"
+test ! -s "$RUNNER_LOG"
+rm "$project/scripts/bounded_process.py"
+mv "$tmp/saved-bounded" "$project/scripts/bounded_process.py"
+
 echo "runner contracts: PASS"
