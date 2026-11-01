@@ -129,10 +129,12 @@ codes and diagnostics are preserved. This does not impose memory/CPU
 cgroups, a syscall sandbox, or a network sandbox.
 
 On POSIX runners the wrapper launches the guest in its own process session.
-It kills that whole process group after the root exits, including otherwise
-silent descendants; on timeout, output flood, and leaked pipe handles,
-descendants cannot retain execution authority. These protections are
-host-side **test-execution controls**, not native Oreslang runtime isolation.
+It kills that process group after the root exits, including otherwise
+silent descendants *remaining in the same group*. A child that creates a new
+process session, escapes the group, or obtains external authority is outside
+this mechanism; an OS-level sandbox or cgroup is required for that stronger
+guarantee. These protections are host-side **test-execution controls**, not
+native Oreslang runtime isolation.
 
 `scripts/test-backend-checker.py` includes host regressions for these
 behaviors. All actual native guest output oracles still require a complete,
