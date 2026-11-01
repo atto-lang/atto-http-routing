@@ -1,5 +1,5 @@
-import class TestCase, TestSuite, TestOptions, TestOutcome, RunSummary from "std/testing";
-import fnc expect_true, expect_false, expect_equal_int, expect_equal_string, run_suite, require_success, fail from "std/testing";
+import class TestCase, TestSuite, TestOptions, TestOutcome, RunSummary from "ores.std/testing";
+import fnc expect_true, expect_false, expect_equal_int, expect_equal_string, run_suite, require_success, fail from "ores.std/testing";
 import module http_routing from "../src/http_routing";
 fnc rejects_zero_limits(): TestOutcome {
   val builder = http_routing.builder();
