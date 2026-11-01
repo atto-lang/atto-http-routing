@@ -58,10 +58,11 @@ def run_bounded(argv, timeout=30, max_bytes=1024 * 1024):
         for reader in readers:
             reader.join(timeout=1)
     pipes_open = any(reader.is_alive() for reader in readers)
+    # Even a descendant that closes its standard streams must not outlive its
+    # guest invocation. Destroy the session after the root process exits.
+    kill_group()
     if pipes_open:
-        # If the compiler exited but left a child holding stdout/stderr open,
-        # stop that entire group rather than leaking the descendant.
-        kill_group()
+        # A leaked stdout/stderr descriptor must not count as successful output.
         for reader in readers:
             reader.join(timeout=1)
     if timed_out:
