@@ -86,30 +86,6 @@ class BackendChecks(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'Symlinked contract path'):
             checker.load_contract()
 
-    def test_symlinked_checkout_parent_is_rejected(self):
-        alias = self.root/'parent-alias'
-        alias.symlink_to(self.root, target_is_directory=True)
-        via_alias = alias/'source'
-        self.assertFalse(via_alias.is_symlink())
-        self.assert_no_java(self.execute(via_alias), 'compiler checkout path must not contain symlinks')
-
-    def test_parent_traversal_checkout_path_is_rejected(self):
-        via_parent = self.source/'..'/'source'
-        self.assert_no_java(self.execute(via_parent), 'compiler checkout must not contain parent traversal')
-
-    def test_untracked_source_file_is_rejected_before_java(self):
-        (self.source/'untracked').write_text('unreviewed')
-        self.assert_no_java(self.execute(), 'compiler checkout must be clean')
-
-    def test_modified_tracked_source_is_rejected_before_java(self):
-        (self.source/'pom.xml').write_text('modified since pin')
-        self.assert_no_java(self.execute(), 'compiler checkout must be clean')
-
-    def test_nested_directory_cannot_claim_pinned_git_root(self):
-        nested = self.source/'nested'
-        nested.mkdir()
-        self.assert_no_java(self.execute(nested), 'compiler checkout must be its own Git root')
-
     def test_symlinked_compiler_pin_is_rejected(self):
         compiler = self.root/'source'
         compiler.mkdir()
@@ -225,6 +201,9 @@ class CompilerLauncherContracts(unittest.TestCase):
         self.commit = subprocess.check_output(
             ['git', '-C', str(self.source), 'rev-parse', 'HEAD'], text=True
         ).strip()
+        # The compiler's target/ output is generated/ignored, not untracked
+        # source. Ensure source cleanliness checks still catch other changes.
+        (self.source/'.git/info/exclude').write_text('target/\\n')
         (self.root/'SOURCE_REF').write_text(self.commit + '\n')
         self.classes = self.source/'target/classes'
         self.main_class = self.classes/'dev/oreslang/launcher/OresMain.class'
@@ -286,6 +265,30 @@ class CompilerLauncherContracts(unittest.TestCase):
         alias = self.root/'source-alias'
         alias.symlink_to(self.source, target_is_directory=True)
         self.assert_no_java(self.execute(alias), 'compiler checkout path must not contain symlinks')
+
+    def test_symlinked_checkout_parent_is_rejected(self):
+        alias = self.root/'parent-alias'
+        alias.symlink_to(self.root, target_is_directory=True)
+        via_alias = alias/'source'
+        self.assertFalse(via_alias.is_symlink())
+        self.assert_no_java(self.execute(via_alias), 'compiler checkout path must not contain symlinks')
+
+    def test_parent_traversal_checkout_path_is_rejected(self):
+        via_parent = self.source/'..'/'source'
+        self.assert_no_java(self.execute(via_parent), 'compiler checkout must not contain parent traversal')
+
+    def test_untracked_source_file_is_rejected_before_java(self):
+        (self.source/'untracked').write_text('unreviewed')
+        self.assert_no_java(self.execute(), 'compiler checkout must be clean')
+
+    def test_modified_tracked_source_is_rejected_before_java(self):
+        (self.source/'pom.xml').write_text('modified since pin')
+        self.assert_no_java(self.execute(), 'compiler checkout must be clean')
+
+    def test_nested_directory_cannot_claim_pinned_git_root(self):
+        nested = self.source/'nested'
+        nested.mkdir()
+        self.assert_no_java(self.execute(nested), 'compiler checkout must be its own Git root')
 
     def test_symlinked_compiler_pin_is_rejected(self):
         pin = self.root/'SOURCE_REF'
