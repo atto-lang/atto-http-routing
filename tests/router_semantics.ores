@@ -154,5 +154,15 @@ pub routine main() -> void {
   );
   stdio.println(limited_builder.get(rt borrow users_edit, 201).is_err());
 
+  // Explicit assertions supplement stdout golden tests, failing closed on drift.
+  if router.resolve("GET", http_routing.request_path(arr["users", "new"])).handler_id != 2 then
+    panic("literal route precedence changed");
+  fi
+  if !router.resolve("DELETE", http_routing.request_path(arr["health"])).is_method_not_allowed() then
+    panic("wrong-method request must not match");
+  fi
+  if !router.resolve("GET", http_routing.request_path(arr["later"])).is_not_found() then
+    panic("build snapshot was mutated");
+  fi
   return;
 }
