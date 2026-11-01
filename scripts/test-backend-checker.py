@@ -321,13 +321,13 @@ class GuestProcessAdmission(unittest.TestCase):
     def test_host_stdout_and_stderr_preserved(self):
         program = "import sys;print('output');print('diagnostic',file=sys.stderr)"
         code, stdout, stderr = self.run_guest([sys.executable, '-c', program])
-        self.assertEqual((code, stdout, stderr), (0, 'output\\n', 'diagnostic\\n'))
+        self.assertEqual((code, stdout, stderr), (0, 'output\n', 'diagnostic\n'))
 
     def test_nonzero_exit_preserved_without_false_pass(self):
         code, stdout, stderr = self.run_guest(
             [sys.executable, '-c', "import sys;print('invalid',file=sys.stderr);sys.exit(17)"]
         )
-        self.assertEqual((code, stdout, stderr), (17, '', 'invalid\\n'))
+        self.assertEqual((code, stdout, stderr), (17, '', 'invalid\n'))
 
     def test_stdout_budget_overflow_rejects_all_partial_output(self):
         code, stdout, stderr = self.run_guest(
