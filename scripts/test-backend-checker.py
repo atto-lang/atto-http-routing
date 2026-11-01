@@ -178,4 +178,95 @@ class BoundedCompilerOutput(unittest.TestCase):
         with self.assertRaises(UnicodeDecodeError):
             checker.run_bounded([sys.executable, '-c', "import os;os.write(1,bytes([255]))"])
 
+class CompilerLauncherContracts(unittest.TestCase):
+    """Exercise the actual Bash launcher with Git and Java-mock receipts."""
+
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        scripts = self.root/'scripts'
+        scripts.mkdir()
+        launcher = Path(__file__).with_name('compiler.sh')
+        (scripts/'compiler.sh').write_text(launcher.read_text())
+        self.script = scripts/'compiler.sh'
+        self.source = self.root/'source'
+        self.source.mkdir()
+        subprocess.run(['git', '-C', str(self.source), 'init', '-q'], check=True)
+        (self.source/'pom.xml').write_text('fixture')
+        subprocess.run(['git', '-C', str(self.source), 'add', 'pom.xml'], check=True)
+        subprocess.run(['git', '-C', str(self.source), '-c', 'user.name=Test',
+                        '-c', 'user.email=test@example.invalid',
+                        'commit', '-qm', 'source'], check=True)
+        self.commit = subprocess.check_output(
+            ['git', '-C', str(self.source), 'rev-parse', 'HEAD'], text=True
+        ).strip()
+        (self.root/'SOURCE_REF').write_text(self.commit + '\n')
+        self.classes = self.source/'target/classes'
+        self.main_class = self.classes/'dev/oreslang/launcher/OresMain.class'
+        self.main_class.parent.mkdir(parents=True)
+        self.main_class.write_bytes(b'fixture-class')
+        self.classpath = self.source/'target/classpath.txt'
+        self.classpath.write_text('dependency.jar\n')
+        self.java_log = self.root/'java-log'
+        self.java = self.root/'java-mock'
+        self.java.write_text('#!/bin/sh\nprintf "invoked\\n" >> "$COMPILER_LAUNCH_LOG"\n')
+        self.java.chmod(0o755)
+
+    def execute(self, checkout=None):
+        env = dict(os.environ,
+                   ORESLANG_SOURCE_DIR=str(checkout or self.source),
+                   ORES_JAVA=str(self.java),
+                   COMPILER_LAUNCH_LOG=str(self.java_log))
+        return subprocess.run(['bash', str(self.script), '--check', 'test.ores'],
+                              capture_output=True, text=True, env=env)
+
+    def assert_no_java(self, result, expected):
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(expected, result.stderr)
+        self.assertFalse(self.java_log.exists(), 'untrusted compiler invoked Java')
+
+    def test_exact_pinned_compiler_launcher_runs(self):
+        result = self.execute()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.java_log.read_text(), 'invoked\n')
+
+    def test_wrong_compiler_revision_never_invokes_java(self):
+        (self.root/'SOURCE_REF').write_text('0'*40 + '\n')
+        self.assert_no_java(self.execute(), 'compiler revision differs')
+
+    def test_empty_compiler_classpath_is_rejected(self):
+        self.classpath.write_text('')
+        self.assert_no_java(self.execute(), 'classpath must be nonempty')
+
+    def test_missing_compiler_entrypoint_is_rejected(self):
+        self.main_class.unlink()
+        self.assert_no_java(self.execute(), 'entrypoint class is missing')
+
+    def test_symlinked_compiler_classpath_is_rejected(self):
+        external = self.root/'external-classpath'
+        external.write_text('preserved')
+        self.classpath.unlink()
+        self.classpath.symlink_to(external)
+        self.assert_no_java(self.execute(), 'classpath must be nonempty')
+        self.assertEqual(external.read_text(), 'preserved')
+
+    def test_symlinked_classes_directory_is_rejected(self):
+        external = self.root/'external-classes'
+        external.mkdir()
+        self.classes.rename(self.source/'target/saved-classes')
+        self.classes.symlink_to(external, target_is_directory=True)
+        self.assert_no_java(self.execute(), 'output directory must not be a symlink')
+
+    def test_symlinked_compiler_checkout_is_rejected(self):
+        alias = self.root/'source-alias'
+        alias.symlink_to(self.source, target_is_directory=True)
+        self.assert_no_java(self.execute(alias), 'compiler checkout must not be a symlink')
+
+    def test_symlinked_compiler_pin_is_rejected(self):
+        pin = self.root/'SOURCE_REF'
+        pin.rename(self.root/'saved-pin')
+        pin.symlink_to(self.root/'saved-pin')
+        self.assert_no_java(self.execute(), 'SOURCE_REF is missing or is a symlink')
+
 if __name__ == '__main__': unittest.main()
