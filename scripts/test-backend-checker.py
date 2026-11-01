@@ -405,4 +405,27 @@ class GuestProcessAdmission(unittest.TestCase):
         self.assertIn('budget exceeded', stderr)
 
 
+    def test_silent_descendant_cannot_outlive_successful_guest(self):
+        import time
+        with tempfile.TemporaryDirectory() as directory:
+            marker = Path(directory) / 'escaped-child'
+            child = (
+                f"import time;time.sleep(0.55);"
+                f"open({str(marker)!r},'w').write('escaped')"
+            )
+            program = (
+                "import subprocess,sys;"
+                "subprocess.Popen([sys.executable,'-c'," + repr(child) +
+                "],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,"
+                "stderr=subprocess.DEVNULL);print('done')"
+            )
+            code, stdout, stderr = self.run_guest(
+                [sys.executable, '-c', program], timeout=3
+            )
+            self.assertEqual(code, 0, stderr)
+            self.assertEqual(stdout, 'done\n')
+            time.sleep(0.8)
+            self.assertFalse(marker.exists(), 'guest child escaped after clean exit')
+
+
 if __name__ == '__main__': unittest.main()
