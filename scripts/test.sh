@@ -2,6 +2,10 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+[[ -f "$repo_root/SOURCE_REF" && ! -L "$repo_root/SOURCE_REF" ]] || {
+  echo "SOURCE_REF must be a regular non-symlink file" >&2
+  exit 65
+}
 expected_ref="$(tr -d '[:space:]' < "$repo_root/SOURCE_REF")"
 if [[ ! "$expected_ref" =~ ^[0-9a-f]{40}$ ]]; then
   echo "SOURCE_REF must contain a full lowercase Git commit SHA" >&2
@@ -16,6 +20,10 @@ if ! command -v "$compiler" >/dev/null 2>&1 && [[ ! -x "$compiler" ]]; then
 fi
 
 : "${ORESLANG_SOURCE_DIR:?Set ORESLANG_SOURCE_DIR to the SOURCE_REF compiler checkout}"
+if [[ -L "$ORESLANG_SOURCE_DIR" ]]; then
+  echo "compiler source directory must not be a symlink" >&2
+  exit 65
+fi
 if [[ -n "$ORESLANG_SOURCE_DIR" ]]; then
   if [[ "$(git -C "$ORESLANG_SOURCE_DIR" rev-parse --show-toplevel)" != "$(cd "$ORESLANG_SOURCE_DIR" && pwd -P)" ]]; then
     echo "ORESLANG_SOURCE_DIR must be its own Git checkout" >&2
