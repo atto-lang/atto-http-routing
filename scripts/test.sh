@@ -74,6 +74,14 @@ for expected in "${edge_expected[@]}"; do
   }
 done
 
+# Resource limits are imposed on every compiler/guest process. The
+# wrapper's own helper must be local, regular and non-symlinked.
+[[ -f "$repo_root/scripts/run-guest.py" && ! -L "$repo_root/scripts/run-guest.py" &&
+   -f "$repo_root/scripts/bounded_process.py" && ! -L "$repo_root/scripts/bounded_process.py" ]] || {
+  echo "unsafe or missing bounded guest runner" >&2
+  exit 65
+}
+
 entry="$repo_root/tests/router_semantics.ores"
 legacy_expected="$repo_root/tests/expected.txt"
 [[ -d "$repo_root/tests" && ! -L "$repo_root/tests" &&
@@ -87,8 +95,8 @@ trap 'rm -f "$actual"' EXIT
 
 cd "$repo_root"
 
-"$compiler" --check --platform=server "$entry"
-"$compiler" --platform=server "$entry" > "$actual"
+python3 "$repo_root/scripts/run-guest.py" "$compiler" --check --platform=server "$entry"
+python3 "$repo_root/scripts/run-guest.py" "$compiler" --platform=server "$entry" > "$actual"
 
 diff -u "$repo_root/tests/expected.txt" "$actual"
 echo "router semantics: PASS"
@@ -96,8 +104,8 @@ echo "router semantics: PASS"
 
 for source in "${edge_sources[@]}"; do
   expected="${source%.ores}.expected"
-  "$compiler" --check --platform=server "$source"
-  "$compiler" --platform=server "$source" > "$actual"
+  python3 "$repo_root/scripts/run-guest.py" "$compiler" --check --platform=server "$source"
+  python3 "$repo_root/scripts/run-guest.py" "$compiler" --platform=server "$source" > "$actual"
   diff -u "$expected" "$actual"
   echo "router edge: $(basename "$source") PASS"
 done
