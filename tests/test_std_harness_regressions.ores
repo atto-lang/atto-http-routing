@@ -1,0 +1,25 @@
+import class TestCase, TestSuite, TestOptions, TestOutcome, RunSummary from "std/testing";
+import fnc expect_true, expect_false, expect_equal_int, expect_equal_string, run_suite, require_success, fail from "std/testing";
+import module http_routing from "../src/http_routing";
+fnc rejects_zero_limits(): TestOutcome {
+  val builder = http_routing.builder();
+  return expect_true(builder.set_limits(0, 10).is_err(), "router must reject zero segment budget");
+}
+fnc rejects_duplicate_capture(): TestOutcome {
+  val builder = http_routing.builder();
+  val pattern = http_routing.path("/pair/{id}/{id}", arr[
+    http_routing.literal("pair"), http_routing.param("id"), http_routing.param("id")
+  ]);
+  return expect_true(builder.get(rt borrow pattern, 10).is_err(),
+    "duplicate path capture names must be rejected");
+}
+pub routine main(): void {
+  val TestSuite suite = new TestSuite("http-routing", arr[
+    new TestCase("rejects_zero_limits", rejects_zero_limits, false, ""),
+    new TestCase("rejects_duplicate_capture", rejects_duplicate_capture, false, "")
+  ]);
+  val TestOptions options = new TestOptions("", false, true);
+  val RunSummary summary = run_suite(rt borrow suite, rt borrow options);
+  require_success(rt borrow summary);
+  return;
+}
