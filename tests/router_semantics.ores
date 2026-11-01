@@ -164,5 +164,18 @@ pub routine main() -> void {
   if !router.resolve("GET", http_routing.request_path(arr["later"])).is_not_found() then
     panic("build snapshot was mutated");
   fi
+  // Independent HTTP routing invariants; no stdout-only oracle credit.
+  if head_match.handler_id != 9 || !head_match.suppress_body then
+    panic("registered HEAD handler or response suppression changed");
+  fi
+  if auto_head.handler_id != 20 || !auto_head.suppress_body then
+    panic("GET-to-HEAD fallback changed");
+  fi
+  if !automatic_options.is_automatic_options() then
+    panic("OPTIONS synthesis changed");
+  fi
+  if router_after.resolve("GET", http_routing.request_path(arr["later"])).handler_id != 11 then
+    panic("new router snapshot did not include late registration");
+  fi
   return;
 }
