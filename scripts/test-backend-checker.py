@@ -101,13 +101,26 @@ class BackendChecks(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'Symlinked contract path'):
                 checker.require_source('BACKEND_TEST_SOURCE', 'SOURCE_REF')
 
+    def test_symlinked_ancestor_of_compiler_checkout_is_rejected(self):
+        real_parent = self.root/'real-parent'
+        real_parent.mkdir()
+        source = real_parent/'compiler'
+        source.mkdir()
+        (self.root/'compiler-parent-link').symlink_to(real_parent, target_is_directory=True)
+        (self.root/'SOURCE_REF').write_text('0'*40)
+        via_alias = self.root/'compiler-parent-link'/'compiler'
+        self.assertFalse(via_alias.is_symlink())
+        with patch.dict(os.environ, {'BACKEND_TEST_SOURCE':str(via_alias)}):
+            with self.assertRaisesRegex(RuntimeError, 'Compiler checkout path must not contain symlinks'):
+                checker.require_source('BACKEND_TEST_SOURCE', 'SOURCE_REF')
+
     def test_symlinked_compiler_checkout_is_rejected(self):
         compiler = self.root/'source'
         compiler.mkdir()
         (self.root/'source-link').symlink_to(compiler, target_is_directory=True)
         (self.root/'SOURCE_REF').write_text('0'*40)
         with patch.dict(os.environ, {'BACKEND_TEST_SOURCE':str(self.root/'source-link')}):
-            with self.assertRaisesRegex(RuntimeError, 'Compiler checkout path must not be a symlink'):
+            with self.assertRaisesRegex(RuntimeError, 'Compiler checkout path must not contain symlinks'):
                 checker.require_source('BACKEND_TEST_SOURCE', 'SOURCE_REF')
 
     def test_changed_execution_status_rejected(self):
