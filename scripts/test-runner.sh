@@ -111,7 +111,7 @@ mv "$project/tests/edge_cases/head-options.expected" "$tmp/saved-expected"
 if bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
   echo "missing edge expectation accepted" >&2; exit 1
 fi
-grep -q "missing, unsafe or empty router edge fixture" "$tmp/output"
+grep -q "incomplete router edge fixture inventory" "$tmp/output"
 test ! -s "$RUNNER_LOG"
 mv "$tmp/saved-expected" "$project/tests/edge_cases/head-options.expected"
 
@@ -120,7 +120,7 @@ printf 'true\n' > "$project/tests/edge_cases/orphan.expected"
 if bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
   echo "orphan edge expectation accepted" >&2; exit 1
 fi
-grep -q "orphan router edge expectation" "$tmp/output"
+grep -q "incomplete router edge fixture inventory" "$tmp/output"
 test ! -s "$RUNNER_LOG"
 rm "$project/tests/edge_cases/orphan.expected"
 
