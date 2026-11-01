@@ -13,10 +13,16 @@ fnc rejects_duplicate_capture(): TestOutcome {
   return expect_true(builder.get(rt borrow pattern, 10).is_err(),
     "duplicate path capture names must be rejected");
 }
+fnc rejects_zero_match_budget(): TestOutcome {
+  val builder = http_routing.builder();
+  return expect_true(builder.set_limits(8, 0).is_err(),
+    "router must reject zero search step budget");
+}
 pub routine main(): void {
   val TestSuite suite = new TestSuite("http-routing", arr[
     new TestCase("rejects_zero_limits", rejects_zero_limits, false, ""),
-    new TestCase("rejects_duplicate_capture", rejects_duplicate_capture, false, "")
+    new TestCase("rejects_duplicate_capture", rejects_duplicate_capture, false, ""),
+    new TestCase("rejects_zero_match_budget", rejects_zero_match_budget, false, "")
   ]);
   val TestOptions options = new TestOptions("", false, true);
   val RunSummary summary = run_suite(rt borrow suite, rt borrow options);
