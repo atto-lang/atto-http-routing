@@ -62,7 +62,7 @@ edge_expected=("$edge_dir"/*.expected)
 }
 for source in "${edge_sources[@]}"; do
   expected="${source%.ores}.expected"
-  [[ -f "$source" && ! -L "$source" && -f "$expected" && ! -L "$expected" && -s "$expected" ]] || {
+  [[ -f "$source" && -s "$source" && ! -L "$source" && -f "$expected" && ! -L "$expected" && -s "$expected" ]] || {
     echo "missing, unsafe or empty router edge fixture: $source" >&2
     exit 65
   }
@@ -85,7 +85,7 @@ done
 entry="$repo_root/tests/router_semantics.ores"
 legacy_expected="$repo_root/tests/expected.txt"
 [[ -d "$repo_root/tests" && ! -L "$repo_root/tests" &&
-   -f "$entry" && ! -L "$entry" &&
+   -f "$entry" && -s "$entry" && ! -L "$entry" &&
    -f "$legacy_expected" && ! -L "$legacy_expected" && -s "$legacy_expected" ]] || {
   echo "unsafe or missing router legacy fixture" >&2
   exit 65
