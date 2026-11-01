@@ -116,3 +116,25 @@ independent cases are required.
 
 A source-only check does not constitute an Oreslang compiler or runtime test.
 `Decision` remains transport-neutral data, not an authorization capability.
+
+## Bounded guest execution and process lifetime
+
+`scripts/test.sh` invokes every positive guest through
+`python3 scripts/run-guest.py`, which uses `bounded_process.run_bounded`
+with a **120-second per-invocation timeout** and a **2 MiB combined stdout
+plus stderr budget**. Check and run are separate bounded processes. A timeout
+exits 124; a budget, invalid UTF-8 or leaked-pipe error exits 70, and no
+partial stdout is accepted as a test oracle. Ordinary compiler error exit
+codes and diagnostics are preserved. This does not impose memory/CPU
+cgroups, a syscall sandbox, or a network sandbox.
+
+On POSIX runners the wrapper launches the guest in its own process session.
+It kills that whole process group after the root exits, including otherwise
+silent descendants; on timeout, output flood, and leaked pipe handles,
+descendants cannot retain execution authority. These protections are
+host-side **test-execution controls**, not native Oreslang runtime isolation.
+
+`scripts/test-backend-checker.py` includes host regressions for these
+behaviors. All actual native guest output oracles still require a complete,
+authorized checkout and an executable pinned compiler. A source-free mocked
+runner pass must not be credited as a native routing test.
