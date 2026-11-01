@@ -18,9 +18,13 @@ def require_source(variable, pin):
     raw = os.environ.get(variable)
     if not raw:
         raise RuntimeError(f'Set {variable} to the pinned compiler checkout')
-    source_input = Path(raw)
-    if source_input.is_symlink():
-        raise RuntimeError('Compiler checkout path must not be a symlink')
+    source_input = Path(raw).absolute()
+    # Resolve only after checking every path component. An alias in an
+    # ancestor directory is still an indirect compiler checkout and can
+    # silently change the source to which an exact commit pin applies.
+    for component in (source_input, *source_input.parents):
+        if component.is_symlink():
+            raise RuntimeError('Compiler checkout path must not contain symlinks')
     source = source_input.resolve()
     expected = local_file(pin).read_text().strip()
     if not re.fullmatch('[0-9a-f]{40}', expected):
