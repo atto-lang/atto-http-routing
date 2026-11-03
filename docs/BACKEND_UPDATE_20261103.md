@@ -2,7 +2,7 @@
 
 `SOURCE_REF` pins `oreslang-source.java` at `273dafad1ba8fd48ebe3a66b58b6d4c5649f77d9`:
 Java `main` `eb02a86348` plus the formatting-borrow fix for module-imported classes
-(oreslang-source.java PR, branch `fix/imported-class-formatting-borrow-20261103`).
+([oreslang-source.java#2497](https://github.com/ores-truffle-oreslang/oreslang-source.java/pull/2497)).
 Unpatched Java `main` rejects `tests/router_semantics.ores` with
 `projected borrow requires a known owned field type for 'handler_id'`, because
 `stdio.println(decision.handler_id)` reads a field of a class reached through
