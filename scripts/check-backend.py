@@ -11,7 +11,7 @@ from bounded_process import run_bounded
 
 ROOT = Path(__file__).resolve().parents[1]
 # Known LLVM fail-closed boundaries. Newer compilers name the rejected file.
-_AT = r' at byte [0-9]+(?: \[file: [A-Za-z0-9_.-]+\.ores\])?'
+_AT = r' at byte [0-9]+(?: \[file: [A-Za-z0-9_.-]+\.(?:atto|ores)\])?'
 UNSUPPORTED_BOUNDARIES = (
     r'oreslang-llvmc: final class field requires declaration-site initializer' + _AT,
     r"oreslang-llvmc: scalar local requires an explicit ': int' or ': bool' type" + _AT,

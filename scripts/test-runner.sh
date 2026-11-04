@@ -9,12 +9,12 @@ mkdir -p "$project/scripts" "$project/tests" "$tmp/bin"
 cp "$root/scripts/test.sh" "$project/scripts/test.sh"
 cp "$root/SOURCE_REF" "$project/SOURCE_REF"
 cp "$root/tests/expected.txt" "$project/tests/expected.txt"
-cp "$root/tests/router_semantics.ores" "$project/tests/router_semantics.ores"
+cp "$root/tests/router_semantics.atto" "$project/tests/router_semantics.atto"
 cat > "$tmp/bin/compiler" <<'COMPILER'
 #!/usr/bin/env bash
 set -euo pipefail
 test "$PWD" = "$RUNNER_PROJECT"
-test "${@: -1}" = "$RUNNER_PROJECT/tests/router_semantics.ores"
+test "${@: -1}" = "$RUNNER_PROJECT/tests/router_semantics.atto"
 if [[ "$1" = --check ]]; then
   test "$#" = 3
   test "$2" = --platform=server

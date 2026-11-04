@@ -10,4 +10,4 @@ roots = ["src", "tests"]
 import_paths = []
 
 [entrypoints]
-main = "tests/router_semantics.ores"
+main = "tests/router_semantics.atto"
