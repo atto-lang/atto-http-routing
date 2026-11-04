@@ -32,3 +32,22 @@ The checker accepts only these named boundaries, optionally followed by the new
 
 Hosted CI is not evidence for this change: workflows on the compiler repositories
 currently finish with zero executed steps (runner admission failure).
+
+## AttoLang `.atto` sources
+
+`src/http_routing.atto` and `tests/router_semantics.atto` are the canonical sources
+(a pure rename of the `.ores` files, then one refactor). Java `main` does not yet
+accept `.atto`, so `SOURCE_REF` pins `00afec5384` on
+`integration/atto-2460-with-2497-20261103` in oreslang-source.java: `.atto` source
+admission ([#2460](https://github.com/ores-truffle-oreslang/oreslang-source.java/pull/2460))
+merged with the formatting-borrow fix (#2497). Repin to `main` once both land.
+
+`RouterBuilder.route` now delegates each segment step to `advance()`, so the
+mutable `BuildNode` local is function-scoped instead of loop-scoped. Behaviour,
+error messages and `tests/expected.txt` are unchanged. This clears LLVM's
+"branch-local class owner requires destructor/drop lowering" boundary; the
+library now stops at the next one, `expected 'rt'`, because native mutable class
+locals accept only `new Class(...)` or `rt take name`, not a borrowed
+`Array<BuildNode>` element. Getting further needs compiler work, not source
+changes. The remaining gaps are executable cases 32, 33, 35 and 36 in
+[oreslang-compilers-parity-testing#28](https://github.com/ores-truffle-oreslang/oreslang-compilers-parity-testing/pull/28).

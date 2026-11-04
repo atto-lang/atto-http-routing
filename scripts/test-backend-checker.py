@@ -43,7 +43,7 @@ class BackendChecks(unittest.TestCase):
         for prefix in ("oreslang-llvmc: scalar local requires an explicit ': int' or ': bool' type at byte ",
                        'oreslang-llvmc: native branch-local class owner requires destructor/drop lowering at byte ',
                        'oreslang-llvmc: final class field requires declaration-site initializer at byte '):
-            for suffix in ('200', '200 [file: router_semantics.ores]'):
+            for suffix in ('200', '200 [file: router_semantics.ores]', '200 [file: router_semantics.atto]'):
                 self.contract['llvm']['rejection_probes'][0]['diagnostic']=prefix+suffix
                 with self.subTest(prefix=prefix, suffix=suffix): self.assertEqual(self.load(), self.contract)
             for suffix in ('', 'bad', '200 extra error', '200 [file: ../x.ores]', '200 [file: x.ores] trailing', '200 [file: x.txt]'):

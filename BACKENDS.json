@@ -14,7 +14,7 @@
       },
       {
         "path": "src/http_routing.atto",
-        "diagnostic": "oreslang-llvmc: native branch-local class owner requires destructor/drop lowering at byte 10442 [file: http_routing.atto]"
+        "diagnostic": "oreslang-llvmc: expected 'rt' at byte 9639 [file: http_routing.atto]"
       }
     ]
   }
