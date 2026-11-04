@@ -9,12 +9,12 @@
     "execution": "unsupported",
     "rejection_probes": [
       {
-        "path": "tests/router_semantics.ores",
-        "diagnostic": "oreslang-llvmc: scalar local requires an explicit ': int' or ': bool' type at byte 200 [file: router_semantics.ores]"
+        "path": "tests/router_semantics.atto",
+        "diagnostic": "oreslang-llvmc: scalar local requires an explicit ': int' or ': bool' type at byte 200 [file: router_semantics.atto]"
       },
       {
-        "path": "src/http_routing.ores",
-        "diagnostic": "oreslang-llvmc: native branch-local class owner requires destructor/drop lowering at byte 10442 [file: http_routing.ores]"
+        "path": "src/http_routing.atto",
+        "diagnostic": "oreslang-llvmc: expected 'rt' at byte 9639 [file: http_routing.atto]"
       }
     ]
   }

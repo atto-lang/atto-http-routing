@@ -37,7 +37,7 @@ if [[ -n "$ORESLANG_SOURCE_DIR" ]]; then
   fi
 fi
 
-entry="$repo_root/tests/router_semantics.ores"
+entry="$repo_root/tests/router_semantics.atto"
 actual="$(mktemp "${TMPDIR:-/tmp}/oreslang-http-routing.XXXXXX")"
 trap 'rm -f "$actual"' EXIT
 
