@@ -10,11 +10,11 @@
     "rejection_probes": [
       {
         "path": "tests/router_semantics.ores",
-        "diagnostic": "oreslang-llvmc: expected non-keyword identifier at byte 69"
+        "diagnostic": "oreslang-llvmc: scalar local requires an explicit ': int' or ': bool' type at byte 200 [file: router_semantics.ores]"
       },
       {
         "path": "src/http_routing.ores",
-        "diagnostic": "oreslang-llvmc: final class field requires declaration-site initializer at byte 570"
+        "diagnostic": "oreslang-llvmc: native branch-local class owner requires destructor/drop lowering at byte 10442 [file: http_routing.ores]"
       }
     ]
   }

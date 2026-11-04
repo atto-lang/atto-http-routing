@@ -645,7 +645,7 @@ define module http_routing as
       fi
 
       let mut SearchBudget budget = new SearchBudget(self.max_match_steps_value);
-      val int endpoint_index = self.match_node(0, 0, rt borrow request_path_value, rt borrow mut budget);
+      val int endpoint_index = self.match_node(0, 0, rt borrow request_path_value, rt mut borrow budget);
 
       if endpoint_index == -2; then
         return new Decision(4, -1, -1, -1, -1, -1, "", "", false, request_path_value.copy());

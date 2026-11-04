@@ -39,6 +39,18 @@ class BackendChecks(unittest.TestCase):
         for suffix in ('bad', '570 extra error', ''):
             self.contract['llvm']['rejection_probes'][0]['diagnostic']=prefix+suffix
             with self.subTest(suffix=suffix), self.assertRaises(RuntimeError): self.load()
+    def test_precise_current_llvm_boundaries(self):
+        for prefix in ("oreslang-llvmc: scalar local requires an explicit ': int' or ': bool' type at byte ",
+                       'oreslang-llvmc: native branch-local class owner requires destructor/drop lowering at byte ',
+                       'oreslang-llvmc: final class field requires declaration-site initializer at byte '):
+            for suffix in ('200', '200 [file: router_semantics.ores]'):
+                self.contract['llvm']['rejection_probes'][0]['diagnostic']=prefix+suffix
+                with self.subTest(prefix=prefix, suffix=suffix): self.assertEqual(self.load(), self.contract)
+            for suffix in ('', 'bad', '200 extra error', '200 [file: ../x.ores]', '200 [file: x.ores] trailing', '200 [file: x.txt]'):
+                self.contract['llvm']['rejection_probes'][0]['diagnostic']=prefix+suffix
+                with self.subTest(prefix=prefix, suffix=suffix), self.assertRaises(RuntimeError): self.load()
+        self.contract['llvm']['rejection_probes'][0]['diagnostic']='oreslang-llvmc: internal error at byte 1 [file: x.ores]'
+        with self.assertRaises(RuntimeError): self.load()
     def test_native_i32_os_entrypoint(self):
         valid='define i32 @main() {\n ret i32 42\n}\n'
         checker.check_positive(subprocess.CompletedProcess([],0,valid,''))
