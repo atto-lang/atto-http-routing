@@ -95,3 +95,48 @@ cryptographic or unforgeable router-generation attestation. The adapter must
 derive authorization solely from its own generation-scoped route/handler
 registry and request capability. In-flight requests must retain their original
 router snapshot until dispatch completes.
+
+## Additional router guest edge matrix
+
+`scripts/test.sh` still executes the historical `router_semantics.ores`
+with `tests/expected.txt`, then executes **every** paired
+`tests/edge_cases/*.ores` and `.expected` fixture. Missing, empty,
+orphaned, or symlinked files fail before edge guests execute; at least three
+independent cases are required.
+
+- `head-options.ores` (15 assertions): GET/HEAD fallback, suppressed HEAD
+  body, automatic OPTIONS, ordered Allow enumeration, POST 405-equivalent
+  decision (without network serialization).
+- `foreign-decision.ores` (11 assertions): cross-router decisions with
+  reused endpoint slots/templates and mismatched handler/operation metadata
+  cannot be used for capture extraction or Allow enumeration.
+- `limits-failclosed.ores` (13 assertions): path length, invalid limit
+  configuration, missing paths, invalid terminal wildcard registration, and
+  fail-closed decision inspection.
+
+A source-only check does not constitute an Oreslang compiler or runtime test.
+`Decision` remains transport-neutral data, not an authorization capability.
+
+## Bounded guest execution and process lifetime
+
+`scripts/test.sh` invokes every positive guest through
+`python3 scripts/run-guest.py`, which uses `bounded_process.run_bounded`
+with a **120-second per-invocation timeout** and a **2 MiB combined stdout
+plus stderr budget**. Check and run are separate bounded processes. A timeout
+exits 124; a budget, invalid UTF-8 or leaked-pipe error exits 70, and no
+partial stdout is accepted as a test oracle. Ordinary compiler error exit
+codes and diagnostics are preserved. This does not impose memory/CPU
+cgroups, a syscall sandbox, or a network sandbox.
+
+On POSIX runners the wrapper launches the guest in its own process session.
+It kills that process group after the root exits, including otherwise
+silent descendants *remaining in the same group*. A child that creates a new
+process session, escapes the group, or obtains external authority is outside
+this mechanism; an OS-level sandbox or cgroup is required for that stronger
+guarantee. These protections are host-side **test-execution controls**, not
+native Oreslang runtime isolation.
+
+`scripts/test-backend-checker.py` includes host regressions for these
+behaviors. All actual native guest output oracles still require a complete,
+authorized checkout and an executable pinned compiler. A source-free mocked
+runner pass must not be credited as a native routing test.

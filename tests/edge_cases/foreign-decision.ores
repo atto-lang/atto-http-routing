@@ -1,0 +1,36 @@
+import module http_routing from "../../src/http_routing";
+
+// Equal endpoint slots/templates are not enough to authorize foreign routing
+// decisions when their handler metadata or operation ID differs.
+pub routine main() -> void {
+  val profile = http_routing.path("/profiles/{user}", arr[
+    http_routing.literal("profiles"),
+    http_routing.param("user")
+  ]);
+
+  val first = http_routing.builder();
+  stdio.println(first.get(rt borrow profile, 17, 101, 201, "profile.read").is_ok());
+  val first_router = first.build();
+  val own = first_router.resolve("GET", http_routing.request_path(arr["profiles", "alice"]));
+  stdio.println(own.is_match());
+  stdio.println(first_router.capture_one(rt borrow own, "user").unwrap() == "alice");
+
+  val foreign_handler = http_routing.builder();
+  stdio.println(foreign_handler.get(rt borrow profile, 99, 101, 201, "profile.read").is_ok());
+  val other_router = foreign_handler.build();
+  val other = other_router.resolve("GET", http_routing.request_path(arr["profiles", "alice"]));
+  stdio.println(first_router.capture_one(rt borrow other, "user").is_none());
+  stdio.println(first_router.allow_count(rt borrow other) == 0);
+  stdio.println(first_router.allow_method_at(rt borrow other, 0).is_none());
+  stdio.println(other_router.capture_one(rt borrow other, "user").unwrap() == "alice");
+
+  val foreign_operation = http_routing.builder();
+  stdio.println(foreign_operation.get(rt borrow profile, 17, 101, 201, "profile.write").is_ok());
+  val operation_router = foreign_operation.build();
+  val other_operation = operation_router.resolve(
+    "GET", http_routing.request_path(arr["profiles", "alice"])
+  );
+  stdio.println(first_router.capture_one(rt borrow other_operation, "user").is_none());
+  stdio.println(first_router.allow_count(rt borrow other_operation) == 0);
+  return;
+}
