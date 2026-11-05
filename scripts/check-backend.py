@@ -79,7 +79,45 @@ def check_rejection(result, probe):
         raise RuntimeError(f"Unexpected rejection result for {probe['path']}: exit={result.returncode}\n{result.stderr}")
 
 def check_positive(result):
-    if result.returncode or not re.search(r'^define i32 @main\(\)', result.stdout, re.MULTILINE):
+    if (result.returncode != 0 or result.stderr != '' or
+            len(re.findall(r'^define i32 @main\(\)(?:[ \t]+[^{\n]*)?[ \t]*\{[ \t]*
+        raise RuntimeError('LLVM positive control failed; rejection is not evidence of compatibility: ' + result.stderr)
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('backend', choices=['java', 'llvm'])
+    args = parser.parse_args()
+    contract = load_contract()
+    if args.backend == 'java':
+        require_source('ORESLANG_SOURCE_DIR', 'SOURCE_REF')
+        env = dict(os.environ)
+        env.setdefault('ORESLANG_COMPILER', str(ROOT / 'scripts/compiler.sh'))
+        env.setdefault('ORESLANG_BIN', env['ORESLANG_COMPILER'])
+        return subprocess.run(['bash', str(local_file(contract['java']['suite']))], cwd=ROOT, env=env, timeout=180).returncode
+    source = require_source('ORESLANG_LLVM_SOURCE_DIR', 'LLVM_SOURCE_REF')
+    compiler = Path(os.environ.get('ORESLANG_LLVM_COMPILER', str(source / 'build/oreslang-llvmc'))).resolve()
+    if not compiler.is_file() or not os.access(compiler, os.X_OK):
+        raise RuntimeError(f'Build oreslang-llvmc first: {compiler}')
+    with tempfile.TemporaryDirectory(prefix='ores-backend-') as directory:
+        baseline = Path(directory) / 'baseline.ores'
+        baseline.write_text('pub fnc main(): int { return 42; }\n')
+        positive = run_bounded([str(compiler), str(baseline)])
+        check_positive(positive)
+        for probe in contract['llvm']['rejection_probes']:
+            entry = local_file(probe['path'])
+            result = run_bounded([str(compiler), str(entry)])
+            check_rejection(result, probe)
+            print(f"LLVM rejected {probe['path']}: {result.stderr.strip()}")
+    print('LLVM rejection contract: PASS (package execution remains unsupported)')
+    return 0
+
+if __name__ == '__main__':
+    try:
+        raise SystemExit(main())
+    except (RuntimeError, OSError, ValueError, subprocess.SubprocessError) as failure:
+        raise SystemExit(f'backend check failed: {failure}')
+,
+                           result.stdout, re.MULTILINE)) != 1):
         raise RuntimeError('LLVM positive control failed; rejection is not evidence of compatibility: ' + result.stderr)
 
 def main():
