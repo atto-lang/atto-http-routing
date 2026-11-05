@@ -155,12 +155,12 @@ class ExactRejectionOutputEvidence(unittest.TestCase):
 
     def test_exact_diagnostic_and_one_final_newline_remain_valid(self):
         probe={'path':'probe.ores', 'diagnostic':'oreslang-llvmc: expected fnc at byte 0'}
-        for output in (probe['diagnostic'],probe['diagnostic']+'\\n'):
+        for output in (probe['diagnostic'],probe['diagnostic']+'\n'):
             checker.check_rejection(subprocess.CompletedProcess([],1,'',output),probe)
 
     def test_whitespace_stdout_cannot_hide_behind_strip(self):
         probe={'path':'probe.ores', 'diagnostic':'oreslang-llvmc: expected fnc at byte 0'}
-        for stdout in (' ', '\\n', '\\t', ' \\n', 'nonempty'):
+        for stdout in (' ', '\n', '\t', ' \n', 'nonempty'):
             with self.subTest(stdout=stdout), self.assertRaises(RuntimeError):
                 checker.check_rejection(subprocess.CompletedProcess([],1,stdout,probe['diagnostic']),probe)
 
@@ -168,11 +168,11 @@ class ExactRejectionOutputEvidence(unittest.TestCase):
         probe={'path':'probe.ores', 'diagnostic':'oreslang-llvmc: expected fnc at byte 0'}
         for stderr in (
             ' '+probe['diagnostic'],
-            '\\n'+probe['diagnostic'],
+            '\n'+probe['diagnostic'],
             probe['diagnostic']+'  ',
-            probe['diagnostic']+'\\n\\n',
-            probe['diagnostic']+'\\r\\n',
-            '\\t'+probe['diagnostic']+'\\n'
+            probe['diagnostic']+'\n\n',
+            probe['diagnostic']+'\r\n',
+            '\t'+probe['diagnostic']+'\n'
         ):
             with self.subTest(stderr=repr(stderr)), self.assertRaises(RuntimeError):
                 checker.check_rejection(subprocess.CompletedProcess([],1,'',stderr),probe)
