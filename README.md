@@ -70,7 +70,7 @@ table.
 Patterns are currently constructed from segments:
 
 - `literal("users")` — exact segment
-- `param("id")` — one named segment
+- `param("id")` — one **non-empty** named decoded segment
 - `wildcard("rest")` — zero or more remaining segments; must be last
 - `root()` — root path
 
@@ -105,7 +105,8 @@ contract without changing the compiled router or match semantics.
   synthesized HEAD and OPTIONS.
 - Unknown paths are distinct from method-not-allowed.
 - Trailing/repeated slash semantics are strict because empty segments are
-  preserved by the adapter contract.
+  preserved by the adapter contract. Named captures never consume empty
+  segments; use an explicit `literal("")` or terminal wildcard instead.
 
 ## Safety and performance
 
