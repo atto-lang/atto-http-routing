@@ -744,7 +744,7 @@ define module http_routing as
     }
 
     pub capture(borrow Decision decision, String name) -> Option<PathCapture> {
-      let int accepted_index = self.decision_endpoint(decision);
+      let int accepted_index = self.decision_endpoint(rt borrow decision);
       if accepted_index < 0; then
         return None;
       fi
@@ -786,7 +786,7 @@ define module http_routing as
     }
 
     pub allow_count(borrow Decision decision) -> int {
-      let int accepted_index = self.decision_endpoint(decision);
+      let int accepted_index = self.decision_endpoint(rt borrow decision);
       if accepted_index < 0; then
         return 0;
       fi
@@ -806,7 +806,7 @@ define module http_routing as
     }
 
     pub allow_method_at(borrow Decision decision, int requested_index) -> Option<String> {
-      let int accepted_index = self.decision_endpoint(decision);
+      let int accepted_index = self.decision_endpoint(rt borrow decision);
       if accepted_index < 0 || requested_index < 0; then
         return None;
       fi
