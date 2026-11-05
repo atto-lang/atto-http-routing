@@ -57,6 +57,15 @@ class BackendChecks(unittest.TestCase):
         for code,ir in [(1,valid),(-11,valid),(0,''),(0,'define i64 @main() { ret i64 42 }')]:
             with self.subTest(code=code,ir=ir), self.assertRaises(RuntimeError):
                 checker.check_positive(subprocess.CompletedProcess([],code,ir,'failure'))
+    def test_positive_control_rejects_spoofed_main_and_stderr(self):
+        valid='define i32 @main() {\\n ret i32 42\\n}\\n'
+        for ir in ('; '+valid, 'define i32 @main()\\n', 'declare i32 @main()\\n',
+                   'define i32 @main() ; absent body\\n', valid+valid):
+            with self.subTest(ir=ir), self.assertRaises(RuntimeError):
+                checker.check_positive(subprocess.CompletedProcess([], 0, ir, ''))
+        with self.assertRaises(RuntimeError):
+            checker.check_positive(subprocess.CompletedProcess([], 0, valid, 'unexpected compiler warning'))
+
     def test_empty_probes_rejected(self):
         self.contract['llvm']['rejection_probes'] = []
         with self.assertRaises(RuntimeError): self.load()
