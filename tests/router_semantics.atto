@@ -154,5 +154,17 @@ pub routine main() -> void {
   );
   stdio.println(limited_builder.get(rt borrow users_edit, 201).is_err());
 
+  // A decision belongs to the table that produced it, even if the other
+  // table has the same route template and an overlapping endpoint index.
+  val foreign_builder = http_routing.builder();
+  ok(foreign_builder.get(rt borrow root, 999));
+  val foreign_router = foreign_builder.build();
+  val foreign_decision = foreign_router.resolve(
+    "GET", http_routing.request_path(new Array<String>())
+  );
+  stdio.println(router.allow_count(rt borrow foreign_decision));
+  stdio.println(router.allow_method_at(rt borrow foreign_decision, 0).is_none());
+  stdio.println(router.capture(rt borrow foreign_decision, "id").is_none());
+
   return;
 }
