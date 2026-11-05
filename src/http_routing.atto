@@ -832,6 +832,17 @@ define module http_routing as
     return new PathPattern("/", new Array<PathSegment>());
   }
 
+  // Optional checked constructor for ALREADY decoded segments.
+  // Do not re-split decoded slashes or decode percent sequences twice.
+  pub fnc request_path_checked(Array<String> segments) -> Result<RequestPath, String> {
+    for (const segment of segments) {
+      if segment == "." || segment == ".."; then
+        return Err("decoded dot segment rejected");
+      fi
+    }
+    return Ok(request_path(segments));
+  }
+
   pub fnc request_path(Array<String> segments) -> RequestPath {
     let mut Array<String> copied = new Array<String>();
     for (const segment of segments) {
