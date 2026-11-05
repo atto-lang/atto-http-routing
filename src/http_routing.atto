@@ -593,7 +593,9 @@ define module http_routing as
       fi
 
       val int parameter_child = self.node_param_child.get(node_index);
-      if parameter_child >= 0; then
+      // Named captures are non-empty. Literal("") and terminal wildcards
+      // still preserve explicit trailing/repeated-slash route semantics.
+      if parameter_child >= 0 && current_segment != ""; then
         val int parameter_match = self.match_node(
           parameter_child,
           segment_index + 1,
