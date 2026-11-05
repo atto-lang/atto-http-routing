@@ -715,12 +715,41 @@ define module http_routing as
       );
     }
 
+    // Decisions can be carried between callers and routers. Never use the
+    // public endpoint/target indexes as unvalidated array indexes; a decision
+    // from a different route table must not authorize captures or Allow data.
+    decision_endpoint(borrow Decision decision) -> int {
+      if decision.endpoint_index < 0 || decision.endpoint_index >= self.endpoints.size; then
+        return -1;
+      fi
+      val Endpoint endpoint = self.endpoints.get(decision.endpoint_index);
+      if decision.route_template != endpoint.template(); then
+        return -1;
+      fi
+      if decision.kind == 0; then
+        if decision.target_index < 0 || decision.target_index >= endpoint.target_count(); then
+          return -1;
+        fi
+        val RouteTarget target = endpoint.target_at(decision.target_index);
+        if target.handler_id != decision.handler_id
+          || target.pipeline_id != decision.pipeline_id
+          || target.contract_id != decision.contract_id
+          || target.operation_id != decision.operation_id; then
+          return -1;
+        fi
+      elif decision.kind != 2 && decision.kind != 3; then
+        return -1;
+      fi
+      return decision.endpoint_index;
+    }
+
     pub capture(borrow Decision decision, String name) -> Option<PathCapture> {
-      if decision.endpoint_index < 0; then
+      let int accepted_index = self.decision_endpoint(decision);
+      if accepted_index < 0; then
         return None;
       fi
 
-      val Endpoint endpoint = self.endpoints.get(decision.endpoint_index);
+      val Endpoint endpoint = self.endpoints.get(accepted_index);
       let int request_index = 0;
 
       for (let int pattern_index = 0; pattern_index < endpoint.pattern().size(); pattern_index = pattern_index + 1) {
@@ -757,11 +786,12 @@ define module http_routing as
     }
 
     pub allow_count(borrow Decision decision) -> int {
-      if decision.endpoint_index < 0; then
+      let int accepted_index = self.decision_endpoint(decision);
+      if accepted_index < 0; then
         return 0;
       fi
 
-      val Endpoint endpoint = self.endpoints.get(decision.endpoint_index);
+      val Endpoint endpoint = self.endpoints.get(accepted_index);
       let int count = endpoint.target_count();
 
       if self.automatic_head_value && self.has_method(rt borrow endpoint, "GET") && !self.has_method(rt borrow endpoint, "HEAD"); then
@@ -776,11 +806,12 @@ define module http_routing as
     }
 
     pub allow_method_at(borrow Decision decision, int requested_index) -> Option<String> {
-      if decision.endpoint_index < 0 || requested_index < 0; then
+      let int accepted_index = self.decision_endpoint(decision);
+      if accepted_index < 0 || requested_index < 0; then
         return None;
       fi
 
-      val Endpoint endpoint = self.endpoints.get(decision.endpoint_index);
+      val Endpoint endpoint = self.endpoints.get(accepted_index);
       if requested_index < endpoint.target_count(); then
         return Some(endpoint.target_at(requested_index).method);
       fi
