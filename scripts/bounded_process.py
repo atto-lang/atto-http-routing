@@ -1,4 +1,6 @@
 """Bound captured compiler output while the process is running."""
+import os
+import signal
 import subprocess
 import threading
 
@@ -6,11 +8,24 @@ import threading
 def run_bounded(argv, timeout=30, max_bytes=1024 * 1024):
     if timeout <= 0 or max_bytes <= 0:
         raise ValueError('positive timeout and output budget required')
-    process = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # POSIX: isolate the compiler process group so its subprocesses cannot
+    # retain output pipes or continue running after cancellation.
+    isolated = os.name == 'posix'
+    process = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               start_new_session=isolated)
     chunks = [bytearray(), bytearray()]
     lock = threading.Lock()
     exceeded = threading.Event()
     total = 0
+
+    def stop():
+        try:
+            if isolated:
+                os.killpg(process.pid, signal.SIGKILL)
+            else:
+                process.kill()
+        except ProcessLookupError:
+            pass
 
     def drain(pipe, slot):
         nonlocal total
@@ -25,7 +40,7 @@ def run_bounded(argv, timeout=30, max_bytes=1024 * 1024):
                     total += len(block)
                     if total > max_bytes:
                         exceeded.set()
-                        process.kill()
+                        stop()
         finally:
             pipe.close()
 
@@ -36,13 +51,17 @@ def run_bounded(argv, timeout=30, max_bytes=1024 * 1024):
     try:
         process.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        process.kill()
+        stop()
         process.wait()
         raise
     finally:
         for reader in readers:
             reader.join(timeout=1)
-    if any(reader.is_alive() for reader in readers):
+    orphaned_pipes = any(reader.is_alive() for reader in readers)
+    if orphaned_pipes:
+        stop()
+        for reader in readers:
+            reader.join(timeout=1)
         raise RuntimeError('compiler output pipes remained open after process exit')
     if exceeded.is_set():
         raise RuntimeError('compiler output budget exceeded')
