@@ -77,3 +77,16 @@ A dispatcher must not send a Decision, PathCapture, or Router object to an
 isolated actor. Extract immutable scalar strings and place them in the actor's
 request capability before transferring it. Keep handler objects in the host
 adapter's registry; routing metadata contains only scalar IDs and operation names.
+
+## Optional checked decoded-segment constructor
+
+`http_routing.request_path_checked(segments)` is an additive AttoLang
+helper for callers that already split the request-target before decoding each
+segment exactly once. It rejects decoded `.` and `..` segments, preserving
+trailing empties and percent-literal data. A decoded slash stays within its
+original segment, without re-splitting. Callers must handle `Err` without
+dispatching.
+
+It is **not** a raw URI parser, decoder, filesystem authorization check,
+or a substitute for adapter-side length, UTF-8, and control-character gates.
+The unchecked `request_path` remains for pure routing and compatibility.
