@@ -154,5 +154,11 @@ pub routine main() -> void {
   );
   stdio.println(limited_builder.get(rt borrow users_edit, 201).is_err());
 
+  // Decoded slash and percent-literal content must not be reinterpreted.
+  stdio.println(http_routing.request_path_checked(arr["docs", "."]).is_err());
+  stdio.println(http_routing.request_path_checked(arr["docs", ".."]).is_err());
+  stdio.println(http_routing.request_path_checked(arr["docs", "a/b"]).is_ok());
+  stdio.println(http_routing.request_path_checked(arr["docs", ""]).is_ok());
+  stdio.println(http_routing.request_path_checked(arr["%2E%2E"]).is_ok());
   return;
 }
