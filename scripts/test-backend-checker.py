@@ -127,4 +127,26 @@ class BoundedCompilerOutput(unittest.TestCase):
         with self.assertRaises(UnicodeDecodeError):
             checker.run_bounded([sys.executable, '-c', "import os;os.write(1,bytes([255]))"])
 
+
+class BoundedAggregateBudget(unittest.TestCase):
+    """Executable host-process controls; not an LLVM or Graal guest test."""
+
+    def test_exact_combined_stdout_stderr_budget_is_admitted(self):
+        source = "import os;os.write(1,b'A'*4096);os.write(2,b'B'*4096)"
+        result = checker.run_bounded([sys.executable, '-c', source], max_bytes=8192)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual((len(result.stdout), len(result.stderr)), (4096, 4096))
+
+    def test_combined_stream_budget_cannot_be_split_per_descriptor(self):
+        source = "import os;os.write(1,b'A'*4096);os.write(2,b'B'*4096)"
+        with self.assertRaisesRegex(RuntimeError, 'output budget exceeded'):
+            checker.run_bounded([sys.executable, '-c', source], max_bytes=8191)
+
+    def test_invalid_limits_rejected_before_process_creation(self):
+        for options in ({'timeout': 0}, {'timeout': -1}, {'max_bytes': 0}, {'max_bytes': -1}):
+            with self.subTest(options=options):
+                with patch.object(checker.subprocess, 'Popen', side_effect=AssertionError('should not spawn')):
+                    with self.assertRaises(ValueError):
+                        checker.run_bounded([sys.executable, '-c', 'print(1)'], **options)
+
 if __name__ == '__main__': unittest.main()
