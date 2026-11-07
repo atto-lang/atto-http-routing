@@ -34,7 +34,7 @@ physical actor heap isolation, or LLVM runtime parity.
 provide the import/runtime surface required by these libraries. An LLVM compiler
 build succeeding is not evidence that this package can run on it.
 
-Build the pinned compiler with LLVM 20 and CMake:
+Build the pinned compiler with LLVM 21 and CMake:
 
 ```sh
 git -C ../oreslang-source.llvm checkout --detach "$(cat LLVM_SOURCE_REF)"
@@ -44,8 +44,8 @@ export ORESLANG_LLVM_SOURCE_DIR="$(cd ../oreslang-source.llvm && pwd)"
 python3 scripts/check-backend.py llvm
 ```
 
-On Homebrew, use `$(brew --prefix llvm@20)/bin/llvm-config` if LLVM 20 is not on
-PATH. LLVM 23 exposed incompatible compiler APIs during local validation. The
+On Homebrew, use `$(brew --prefix llvm@21)/bin/llvm-config` if LLVM 21 is not on
+PATH. LLVM 22 and newer remove `Intrinsic::getDeclaration` and do not build this compiler (validated 2026-11-06). The
 compiler target builds on macOS; the wider native actor test target additionally
 requires `threads.h`, absent from the tested macOS SDK.
 
