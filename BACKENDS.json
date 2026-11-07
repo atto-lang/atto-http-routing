@@ -9,12 +9,12 @@
     "execution": "unsupported",
     "rejection_probes": [
       {
-        "path": "tests/router_semantics.ores",
-        "diagnostic": "oreslang-llvmc: expected non-keyword identifier at byte 69"
+        "path": "tests/router_semantics.atto",
+        "diagnostic": "oreslang-llvmc: scalar local requires an explicit ': int' or ': bool' type at byte 200 [file: router_semantics.atto]"
       },
       {
-        "path": "src/http_routing.ores",
-        "diagnostic": "oreslang-llvmc: final class field requires declaration-site initializer at byte 570"
+        "path": "src/http_routing.atto",
+        "diagnostic": "oreslang-llvmc: expected 'rt' at byte 9639 [file: http_routing.atto]"
       }
     ]
   }

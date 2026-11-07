@@ -324,6 +324,37 @@ define module http_routing as
       return Ok(true);
     }
 
+    // Returns the child node for one pattern segment, creating it when
+    // absent: -1 for a conflicting parameter name, -2 for a conflicting
+    // wildcard name at the same position.
+    advance(mut self)(int node_index, borrow PathSegment segment) -> int {
+      let mut BuildNode current = self.nodes.get(node_index);
+      if segment.kind == 0; then
+        let int child_index = current.child_for_literal(segment.value);
+        if child_index < 0; then
+          child_index = self.new_node();
+          current.add_literal(segment.value, child_index);
+        fi
+        return child_index;
+      fi
+      if segment.kind == 1; then
+        if current.param_child < 0; then
+          current.param_child = self.new_node();
+          current.param_name = segment.value;
+        elif current.param_name != segment.value; then
+          return -1;
+        fi
+        return current.param_child;
+      fi
+      if current.wildcard_child < 0; then
+        current.wildcard_child = self.new_node();
+        current.wildcard_name = segment.value;
+      elif current.wildcard_name != segment.value; then
+        return -2;
+      fi
+      return current.wildcard_child;
+    }
+
     pub route(mut self)(
       String method_value,
       borrow PathPattern pattern,
@@ -358,31 +389,12 @@ define module http_routing as
 
       for (let int segment_index = 0; segment_index < pattern.size(); segment_index = segment_index + 1) {
         val PathSegment segment = pattern.segment_at(segment_index);
-        let mut BuildNode current = self.nodes.get(node_index);
-
-        if segment.kind == 0; then
-          let int child_index = current.child_for_literal(segment.value);
-          if child_index < 0; then
-            child_index = self.new_node();
-            current.add_literal(segment.value, child_index);
-          fi
-          node_index = child_index;
-        elif segment.kind == 1; then
-          if current.param_child < 0; then
-            current.param_child = self.new_node();
-            current.param_name = segment.value;
-          elif current.param_name != segment.value; then
-            return Err("conflicting parameter name at the same route position");
-          fi
-          node_index = current.param_child;
-        else
-          if current.wildcard_child < 0; then
-            current.wildcard_child = self.new_node();
-            current.wildcard_name = segment.value;
-          elif current.wildcard_name != segment.value; then
-            return Err("conflicting wildcard name at the same route position");
-          fi
-          node_index = current.wildcard_child;
+        node_index = self.advance(node_index, rt borrow segment);
+        if node_index == -1; then
+          return Err("conflicting parameter name at the same route position");
+        fi
+        if node_index == -2; then
+          return Err("conflicting wildcard name at the same route position");
         fi
       }
 
@@ -647,7 +659,7 @@ define module http_routing as
       fi
 
       let mut SearchBudget budget = new SearchBudget(self.max_match_steps_value);
-      val int endpoint_index = self.match_node(0, 0, rt borrow request_path_value, rt borrow mut budget);
+      val int endpoint_index = self.match_node(0, 0, rt borrow request_path_value, rt mut borrow budget);
 
       if endpoint_index == -2; then
         return new Decision(4, -1, -1, -1, -1, -1, "", "", false, request_path_value.copy());

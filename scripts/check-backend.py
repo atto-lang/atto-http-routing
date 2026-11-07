@@ -10,6 +10,13 @@ import tempfile
 from bounded_process import run_bounded
 
 ROOT = Path(__file__).resolve().parents[1]
+# Known LLVM fail-closed boundaries. Newer compilers name the rejected file.
+_AT = r' at byte [0-9]+(?: \[file: [A-Za-z0-9_.-]+\.(?:atto|ores)\])?'
+UNSUPPORTED_BOUNDARIES = (
+    r'oreslang-llvmc: final class field requires declaration-site initializer' + _AT,
+    r"oreslang-llvmc: scalar local requires an explicit ': int' or ': bool' type" + _AT,
+    r'oreslang-llvmc: native branch-local class owner requires destructor/drop lowering' + _AT,
+)
 
 def git(directory, *args):
     return subprocess.check_output(['git', '-C', str(directory), *args], text=True).strip()
@@ -62,12 +69,13 @@ def load_contract():
             raise RuntimeError('Duplicate LLVM rejection probe')
         seen.add(path)
         diagnostic = probe['diagnostic']
-        if not isinstance(diagnostic, str) or '\n' in diagnostic or not (diagnostic.startswith('oreslang-llvmc: expected ') or re.fullmatch(r'oreslang-llvmc: final class field requires declaration-site initializer at byte [0-9]+', diagnostic)):
+        if not isinstance(diagnostic, str) or '\n' in diagnostic or not (diagnostic.startswith('oreslang-llvmc: expected ') or any(re.fullmatch(boundary, diagnostic) for boundary in UNSUPPORTED_BOUNDARIES)):
             raise RuntimeError('Expected a specific unsupported-syntax diagnostic')
     return contract
 
 def check_rejection(result, probe):
-    if result.returncode != 1 or result.stdout.strip() or result.stderr.strip() != probe['diagnostic']:
+    if (result.returncode != 1 or result.stdout != '' or
+            result.stderr not in (probe['diagnostic'], probe['diagnostic'] + '\n')):
         raise RuntimeError(f"Unexpected rejection result for {probe['path']}: exit={result.returncode}\n{result.stderr}")
 
 def check_positive(result):

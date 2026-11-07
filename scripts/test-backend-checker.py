@@ -39,6 +39,18 @@ class BackendChecks(unittest.TestCase):
         for suffix in ('bad', '570 extra error', ''):
             self.contract['llvm']['rejection_probes'][0]['diagnostic']=prefix+suffix
             with self.subTest(suffix=suffix), self.assertRaises(RuntimeError): self.load()
+    def test_precise_current_llvm_boundaries(self):
+        for prefix in ("oreslang-llvmc: scalar local requires an explicit ': int' or ': bool' type at byte ",
+                       'oreslang-llvmc: native branch-local class owner requires destructor/drop lowering at byte ',
+                       'oreslang-llvmc: final class field requires declaration-site initializer at byte '):
+            for suffix in ('200', '200 [file: router_semantics.ores]', '200 [file: router_semantics.atto]'):
+                self.contract['llvm']['rejection_probes'][0]['diagnostic']=prefix+suffix
+                with self.subTest(prefix=prefix, suffix=suffix): self.assertEqual(self.load(), self.contract)
+            for suffix in ('', 'bad', '200 extra error', '200 [file: ../x.ores]', '200 [file: x.ores] trailing', '200 [file: x.txt]'):
+                self.contract['llvm']['rejection_probes'][0]['diagnostic']=prefix+suffix
+                with self.subTest(prefix=prefix, suffix=suffix), self.assertRaises(RuntimeError): self.load()
+        self.contract['llvm']['rejection_probes'][0]['diagnostic']='oreslang-llvmc: internal error at byte 1 [file: x.ores]'
+        with self.assertRaises(RuntimeError): self.load()
     def test_native_i32_os_entrypoint(self):
         valid='define i32 @main() {\n ret i32 42\n}\n'
         checker.check_positive(subprocess.CompletedProcess([],0,valid,''))
@@ -114,5 +126,55 @@ class BoundedCompilerOutput(unittest.TestCase):
     def test_invalid_utf8_rejected(self):
         with self.assertRaises(UnicodeDecodeError):
             checker.run_bounded([sys.executable, '-c', "import os;os.write(1,bytes([255]))"])
+
+
+class BoundedAggregateBudget(unittest.TestCase):
+    """Executable host-process controls; not an LLVM or Graal guest test."""
+
+    def test_exact_combined_stdout_stderr_budget_is_admitted(self):
+        source = "import os;os.write(1,b'A'*4096);os.write(2,b'B'*4096)"
+        result = checker.run_bounded([sys.executable, '-c', source], max_bytes=8192)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual((len(result.stdout), len(result.stderr)), (4096, 4096))
+
+    def test_combined_stream_budget_cannot_be_split_per_descriptor(self):
+        source = "import os;os.write(1,b'A'*4096);os.write(2,b'B'*4096)"
+        with self.assertRaisesRegex(RuntimeError, 'output budget exceeded'):
+            checker.run_bounded([sys.executable, '-c', source], max_bytes=8191)
+
+    def test_invalid_limits_rejected_before_process_creation(self):
+        for options in ({'timeout': 0}, {'timeout': -1}, {'max_bytes': 0}, {'max_bytes': -1}):
+            with self.subTest(options=options):
+                with patch.object(checker.subprocess, 'Popen', side_effect=AssertionError('should not spawn')):
+                    with self.assertRaises(ValueError):
+                        checker.run_bounded([sys.executable, '-c', 'print(1)'], **options)
+
+
+class ExactRejectionOutputEvidence(unittest.TestCase):
+    """LLVm expected rejection must be exactly one line, not strip-normalized."""
+
+    def test_exact_diagnostic_and_one_final_newline_remain_valid(self):
+        probe={'path':'probe.ores', 'diagnostic':'oreslang-llvmc: expected fnc at byte 0'}
+        for output in (probe['diagnostic'],probe['diagnostic']+'\n'):
+            checker.check_rejection(subprocess.CompletedProcess([],1,'',output),probe)
+
+    def test_whitespace_stdout_cannot_hide_behind_strip(self):
+        probe={'path':'probe.ores', 'diagnostic':'oreslang-llvmc: expected fnc at byte 0'}
+        for stdout in (' ', '\n', '\t', ' \n', 'nonempty'):
+            with self.subTest(stdout=stdout), self.assertRaises(RuntimeError):
+                checker.check_rejection(subprocess.CompletedProcess([],1,stdout,probe['diagnostic']),probe)
+
+    def test_padded_or_multiline_stderr_is_not_exact_diagnostic(self):
+        probe={'path':'probe.ores', 'diagnostic':'oreslang-llvmc: expected fnc at byte 0'}
+        for stderr in (
+            ' '+probe['diagnostic'],
+            '\n'+probe['diagnostic'],
+            probe['diagnostic']+'  ',
+            probe['diagnostic']+'\n\n',
+            probe['diagnostic']+'\r\n',
+            '\t'+probe['diagnostic']+'\n'
+        ):
+            with self.subTest(stderr=repr(stderr)), self.assertRaises(RuntimeError):
+                checker.check_rejection(subprocess.CompletedProcess([],1,'',stderr),probe)
 
 if __name__ == '__main__': unittest.main()
