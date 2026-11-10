@@ -2,8 +2,8 @@
 
 ## Actor-frame integration checkpoint — 2026-11-10
 
-`SOURCE_REF` now pins `3cf4559f7b5e232c3d05639a16358f53a1a6f18f`, the
-current-main actor frame integration in
+`SOURCE_REF` now pins `2e21d99af9f7b4b5564647fb9b914da0be1ac22c`, the
+current-main actor frame integration with execution-scope guards in
 [Java PR #2781](https://github.com/ores-truffle-oreslang/oreslang-source.java/pull/2781).
 The real `.atto` routing semantics suite passes locally against this exact,
 clean compiler checkout. This is an unmerged compiler snapshot, not a claim that
