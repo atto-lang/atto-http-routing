@@ -1,10 +1,13 @@
 # Compiler PR compatibility checkpoint — 2026-10-06
 
-## Actor-frame integration checkpoint — 2026-11-10
+## Sealed-state/frame integration checkpoint — 2026-11-10
 
-`SOURCE_REF` now pins `2e21d99af9f7b4b5564647fb9b914da0be1ac22c`, the
-current-main actor frame integration with execution-scope guards in
-[Java PR #2781](https://github.com/ores-truffle-oreslang/oreslang-source.java/pull/2781).
+`SOURCE_REF` now pins `e6098659c2e1641564bb5835b4dbb92a6a00b1a8`, the
+current-main sealed-state/actor-frame integration with execution-scope guards in
+[Java PR #2796](https://github.com/ores-truffle-oreslang/oreslang-source.java/pull/2796).
+It preserves #2781/#2747 ancestry, passes 306 focused tests plus four updated
+main admission tests and 31 low-stack guest tests, and retains the unrelated
+unsupported source gates. Concurrent-default guest scheduling remains open.
 The real `.atto` routing semantics suite passes locally against this exact,
 clean compiler checkout. This is an unmerged compiler snapshot, not a claim that
 its features are on main, fully native, or proof of complete actor heap/stack
