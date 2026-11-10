@@ -1,5 +1,15 @@
 # Compiler PR compatibility checkpoint — 2026-10-06
 
+## Actor-frame integration checkpoint — 2026-11-10
+
+`SOURCE_REF` now pins `3cf4559f7b5e232c3d05639a16358f53a1a6f18f`, the
+current-main actor frame integration in
+[Java PR #2781](https://github.com/ores-truffle-oreslang/oreslang-source.java/pull/2781).
+The real `.atto` routing semantics suite passes locally against this exact,
+clean compiler checkout. This is an unmerged compiler snapshot, not a claim that
+its features are on main, fully native, or proof of complete actor heap/stack
+isolation. The historical checklist below refers to its original review date.
+
 **Component:** HTTP route semantics, error handling and request dispatch.
 
 Compiler source PRs **all open** at review: [#398](https://github.com/ores-truffle-oreslang/oreslang-source.java/pull/398), [#399](https://github.com/ores-truffle-oreslang/oreslang-source.java/pull/399), [#404](https://github.com/ores-truffle-oreslang/oreslang-source.java/pull/404), [#405](https://github.com/ores-truffle-oreslang/oreslang-source.java/pull/405), [#406](https://github.com/ores-truffle-oreslang/oreslang-source.java/pull/406), [#408](https://github.com/ores-truffle-oreslang/oreslang-source.java/pull/408), [#409](https://github.com/ores-truffle-oreslang/oreslang-source.java/pull/409), [#410](https://github.com/ores-truffle-oreslang/oreslang-source.java/pull/410), [#411](https://github.com/ores-truffle-oreslang/oreslang-source.java/pull/411), [#412](https://github.com/ores-truffle-oreslang/oreslang-source.java/pull/412).
