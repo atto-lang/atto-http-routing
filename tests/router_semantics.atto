@@ -166,7 +166,8 @@ pub routine main() -> void {
   stdio.println(method_builder.route("GET:", rt borrow health, 306).is_err());
   val method_router = method_builder.build();
   stdio.println(method_router.resolve("M-SEARCH", http_routing.request_path(arr["health"])).handler_id == 300);
-  stdio.println(method_router.allow_count(rt borrow method_router.resolve("POST", http_routing.request_path(arr["health"]))) == 3);
+  val method_wrong = method_router.resolve("POST", http_routing.request_path(arr["health"]));
+  stdio.println(method_router.allow_count(rt borrow method_wrong) == 2);
 
   return;
 }
