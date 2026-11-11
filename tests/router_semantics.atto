@@ -154,6 +154,12 @@ pub routine main() -> void {
   );
   stdio.println(limited_builder.get(rt borrow users_edit, 201).is_err());
 
+  // Blank named segments are not legal matches; a literal empty route
+  // segment remains a separate, intentionally registered route shape.
+  stdio.println(router.resolve(
+    "GET", http_routing.request_path(arr["users", "", "edit"])
+  ).is_not_found());
+
   // A decision belongs to the table that produced it, even if the other
   // table has the same route template and an overlapping endpoint index.
   val foreign_builder = http_routing.builder();
