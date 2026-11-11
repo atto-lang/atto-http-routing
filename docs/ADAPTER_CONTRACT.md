@@ -10,6 +10,14 @@ custom extension method. Matching is case-sensitive in the core.
 
 Do not silently rewrite an unknown method to GET.
 
+Registration fails on CR, LF, TAB, NUL, spaces, commas, and colons in
+method names. This is a defense-in-depth guard because registered methods
+can be emitted in HTTP `Allow` headers. Extension methods such as
+`M-SEARCH` remain supported. The adapter and HTTP response writer **must**
+still enforce the full HTTP `token` grammar (and reject all other control
+characters) at the raw-wire boundary; these routing checks are not a
+replacement for that mandatory protocol validation.
+
 ## Path segmentation
 
 Split the request-target path on '/' before percent-decoding segment contents.
