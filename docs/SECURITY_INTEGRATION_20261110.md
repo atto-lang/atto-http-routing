@@ -1,6 +1,6 @@
 # Router decision safety + Java compiler integration
 
-Status: **candidate, NOT_EXECUTED at this combined head** (2026-11-10).
+Status (2026-11-11): **Java-backed guest routing and downstream live HTTP tests have executed in exact-source private CI.** See Router PR #51 for the latest run, Git head/tree, nonzero-step receipts and mutation controls; this document alone does not certify a newly changed head. Original-org zero-step jobs remain runner-admission failures. Independent review and unforgeable router-generation authority (issue #52) remain outstanding.
 
 ## Source identity
 - Router base security branch: PR #43, after decision path-shape checks,
