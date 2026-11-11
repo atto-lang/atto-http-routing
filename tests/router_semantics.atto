@@ -166,5 +166,17 @@ pub routine main() -> void {
   stdio.println(router.allow_method_at(rt borrow foreign_decision, 0).is_none());
   stdio.println(router.capture(rt borrow foreign_decision, "id").is_none());
 
+  // Deliberately misleading canonical template and handler ID: a different
+  // route shape cannot authorize this router's root Allow list.
+  val deceptive_builder = http_routing.builder();
+  val deceptive_root = http_routing.path("/", arr[http_routing.literal("foreign")]);
+  ok(deceptive_builder.get(rt borrow deceptive_root, 1));
+  val deceptive_router = deceptive_builder.build();
+  val deceptive_decision = deceptive_router.resolve(
+    "GET", http_routing.request_path(arr["foreign"])
+  );
+  stdio.println(router.allow_count(rt borrow deceptive_decision));
+  stdio.println(router.allow_method_at(rt borrow deceptive_decision, 0).is_none());
+
   return;
 }
