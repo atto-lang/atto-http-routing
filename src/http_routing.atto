@@ -593,7 +593,9 @@ define module http_routing as
       fi
 
       val int parameter_child = self.node_param_child.get(node_index);
-      if parameter_child >= 0; then
+      // Named parameters are nonempty. Do not let a blank decoded segment
+      // silently select a protected resource or an authorization fallback.
+      if parameter_child >= 0 && current_segment != ""; then
         val int parameter_match = self.match_node(
           parameter_child,
           segment_index + 1,
@@ -755,6 +757,17 @@ define module http_routing as
         return -1;
       fi
       if !self.decision_path_matches(rt borrow endpoint, rt borrow decision.path_value); then
+        return -1;
+      fi
+      // A plausible path shape is not enough when this table contains a
+      // more-specific literal or a different winning route. Re-run the
+      // immutable path lookup under this router's search budget and require
+      // the same winner; a decision never selects its own endpoint.
+      let mut SearchBudget replay_budget = new SearchBudget(self.max_match_steps_value);
+      val int winner = self.match_node(
+        0, 0, rt borrow decision.path_value, rt mut borrow replay_budget
+      );
+      if winner != decision.endpoint_index; then
         return -1;
       fi
       if decision.kind == 0; then
