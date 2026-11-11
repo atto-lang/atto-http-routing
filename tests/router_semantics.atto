@@ -164,6 +164,8 @@ pub routine main() -> void {
   stdio.println(method_builder.route("GET\t", rt borrow health, 304).is_err());
   stdio.println(method_builder.route("GET\u0000", rt borrow health, 305).is_err());
   stdio.println(method_builder.route("GET:", rt borrow health, 306).is_err());
+  stdio.println(method_builder.route("get", rt borrow health, 307).is_err());
+  stdio.println(method_builder.route("GÉT", rt borrow health, 308).is_err());
   val method_router = method_builder.build();
   stdio.println(method_router.resolve("M-SEARCH", http_routing.request_path(arr["health"])).handler_id == 300);
   val method_wrong = method_router.resolve("POST", http_routing.request_path(arr["health"]));
