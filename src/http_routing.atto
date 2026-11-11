@@ -756,7 +756,8 @@ define module http_routing as
       if decision.route_template != endpoint.template(); then
         return -1;
       fi
-      if !self.decision_path_matches(rt borrow endpoint, rt borrow decision.path_value); then
+      val RequestPath verified_path = decision.path();
+      if !self.decision_path_matches(rt borrow endpoint, rt borrow verified_path); then
         return -1;
       fi
       // A plausible path shape is not enough when this table contains a
@@ -765,7 +766,7 @@ define module http_routing as
       // the same winner; a decision never selects its own endpoint.
       let mut SearchBudget replay_budget = new SearchBudget(self.max_match_steps_value);
       val int winner = self.match_node(
-        0, 0, rt borrow decision.path_value, rt mut borrow replay_budget
+        0, 0, rt borrow verified_path, rt mut borrow replay_budget
       );
       if winner != decision.endpoint_index; then
         return -1;
