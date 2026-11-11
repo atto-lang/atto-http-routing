@@ -718,12 +718,43 @@ define module http_routing as
     // Decisions can be carried between callers and routers. Never use the
     // public endpoint/target indexes as unvalidated array indexes; a decision
     // from a different route table must not authorize captures or Allow data.
+    // A matching template string is not proof that two routers compiled the
+    // same segment shape. Check the request snapshot against this endpoint
+    // before permitting capture or Allow inspection; do not trust a foreign
+    // Decision's public endpoint index or route_template as authority.
+    decision_path_matches(borrow Endpoint endpoint, borrow RequestPath path_value) -> bool {
+      val PathPattern pattern = endpoint.pattern();
+      if path_value.size() > self.max_segments_value; then
+        return false;
+      fi
+      for (let int index = 0; index < pattern.size(); index = index + 1) {
+        val PathSegment segment = pattern.segment_at(index);
+        if segment.kind == 2; then
+          return index == pattern.size() - 1;
+        fi
+        if index >= path_value.size(); then
+          return false;
+        fi
+        val String actual = path_value.segment_at(index);
+        if segment.kind == 0 && actual != segment.value; then
+          return false;
+        fi
+        if segment.kind == 1 && actual == ""; then
+          return false;
+        fi
+      }
+      return path_value.size() == pattern.size();
+    }
+
     decision_endpoint(borrow Decision decision) -> int {
       if decision.endpoint_index < 0 || decision.endpoint_index >= self.endpoints.size; then
         return -1;
       fi
       val Endpoint endpoint = self.endpoints.get(decision.endpoint_index);
       if decision.route_template != endpoint.template(); then
+        return -1;
+      fi
+      if !self.decision_path_matches(rt borrow endpoint, rt borrow decision.path_value); then
         return -1;
       fi
       if decision.kind == 0; then
