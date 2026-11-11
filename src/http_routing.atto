@@ -7,26 +7,6 @@
 
 define module http_routing as
 
-  // Method validation happens at registration, never in the request hot path.
-  // HTTP tchar alphabet (RFC 9110), restricted to canonical uppercase methods.
-  // Replace-literal is safe for embedded NUL and non-ASCII Unicode: anything
-  // not in this explicit set remains and is rejected. '*' is used by any().
-  fnc canonical_method(String method_value) -> bool {
-    if method_value == ""; then return false; fi
-    let String remaining = method_value;
-    for (const allowed of arr[
-      "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
-      "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
-      "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
-      "!", "#", "$", "%", "&", "'", "*", "+", "-", ".", "^", "_",
-      "`", "|", "~"
-    ]) {
-      remaining = remaining.replace_literal(allowed, "");
-    }
-    return remaining == "";
-  }
-
-
   // Segment kinds are deliberately numeric and private to the implementation:
   // 0 = static literal, 1 = named parameter, 2 = terminal wildcard.
   define class PathSegment as
@@ -304,6 +284,25 @@ define module http_routing as
     let int max_segments_value = 128;
     let int max_match_steps_value = 4096;
 
+    // Method validation happens at registration, never in the request hot path.
+    // HTTP tchar alphabet (RFC 9110), restricted to canonical uppercase methods.
+    // Replace-literal is safe for embedded NUL and non-ASCII Unicode: anything
+    // not in this explicit set remains and is rejected. '*' is used by any().
+    fnc canonical_method(String method_value) -> bool {
+      if method_value == ""; then return false; fi
+      let String remaining = method_value;
+      for (const allowed of arr[
+        "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+        "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+        "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+        "!", "#", "$", "%", "&", "'", "*", "+", "-", ".", "^", "_",
+        "`", "|", "~"
+      ]) {
+        remaining = remaining.replace_literal(allowed, "");
+      }
+      return remaining == "";
+    }
+
     ensure_root(mut self)(): void {
       if self.nodes.size == 0; then
         self.nodes.add(new BuildNode());
@@ -396,7 +395,7 @@ define module http_routing as
       fi
       // Route methods can flow into Allow: reject all non-token bytes and
       // noncanonical lowercase, not just obvious CR/LF response splitting.
-      if !canonical_method(method_value); then
+      if !self.canonical_method(method_value); then
         return Err("HTTP method must be a canonical uppercase HTTP token");
       fi
       if handler_id < 0; then
