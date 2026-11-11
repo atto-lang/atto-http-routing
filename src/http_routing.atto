@@ -374,6 +374,15 @@ define module http_routing as
       if method_value == ""; then
         return Err("HTTP method must not be empty");
       fi
+      // Defense-in-depth for adapters that emit registered methods in Allow.
+      // A registration method must not splice another field or method token.
+      // The HTTP ingress adapter must still validate the complete RFC token.
+      if method_value.contains_literal("\r") || method_value.contains_literal("\n") ||
+         method_value.contains_literal("\t") || method_value.contains_literal("\u0000") ||
+         method_value.contains_literal(" ") || method_value.contains_literal(",") ||
+         method_value.contains_literal(":"); then
+        return Err("HTTP method contains unsafe delimiter or control character");
+      fi
       if handler_id < 0; then
         return Err("handler_id must be non-negative");
       fi
