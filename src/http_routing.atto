@@ -288,7 +288,7 @@ define module http_routing as
     // HTTP tchar alphabet (RFC 9110), restricted to canonical uppercase methods.
     // Replace-literal is safe for embedded NUL and non-ASCII Unicode: anything
     // not in this explicit set remains and is rejected. '*' is used by any().
-    fnc canonical_method(String method_value) -> bool {
+    canonical_method(String method_value) -> bool {
       if method_value == ""; then return false; fi
       let String remaining = method_value;
       for (const allowed of arr[
