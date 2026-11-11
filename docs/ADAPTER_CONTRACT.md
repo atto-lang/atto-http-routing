@@ -10,13 +10,14 @@ custom extension method. Matching is case-sensitive in the core.
 
 Do not silently rewrite an unknown method to GET.
 
-Registration fails on CR, LF, TAB, NUL, spaces, commas, and colons in
-method names. This is a defense-in-depth guard because registered methods
-can be emitted in HTTP `Allow` headers. Extension methods such as
-`M-SEARCH` remain supported. The adapter and HTTP response writer **must**
-still enforce the full HTTP `token` grammar (and reject all other control
-characters) at the raw-wire boundary; these routing checks are not a
-replacement for that mandatory protocol validation.
+Registration admits only **uppercase** ASCII HTTP `tchar` method tokens,
+including the `*` registration wildcard. It rejects lowercase, non-ASCII,
+all control characters, commas, spaces and header-delimiter injection.
+Extension methods such as `M-SEARCH` remain supported. This one-time
+registration guard is important because methods can be emitted in HTTP
+`Allow` response headers. The HTTP adapter must independently validate
+the raw request method at ingress; the response writer must still validate
+outgoing header values. Registration validation does not sanitize wire input.
 
 ## Path segmentation
 
