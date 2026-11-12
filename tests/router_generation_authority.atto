@@ -1,8 +1,9 @@
 import module http_routing from "../src/http_routing";
 
-// Pending security acceptance test for issue #52.
-// Current router metadata replay is NOT an instance/generation capability.
-// This test must fail until the runtime-minted authorization API exists.
+// Same-runtime router-snapshot identity acceptance regression for issue #52.
+// The private identity witness rejects identical foreign route tables and
+// replacement snapshots. A passing fixture does NOT prove runtime-minted
+// supervisor/tenant authority, revocation, or cross-isolate safety.
 pub routine main() -> void {
   val route = http_routing.path("/users/{id}", arr[
     http_routing.literal("users"),
@@ -24,7 +25,7 @@ pub routine main() -> void {
   stdio.println(!first_router.capture_one(rt borrow decision_from_first, "id").is_none());
 
   // A foreign identical router must NOT authorize lookup from first_router's Decision.
-  // These are expected to be false with the current unsealed public Decision API.
+  // A foreign snapshot must be rejected even with identical public metadata.
   stdio.println(second_router.capture_one(rt borrow decision_from_first, "id").is_none());
   stdio.println(second_router.allow_count(rt borrow decision_from_first) == 0);
   stdio.println(second_router.allow_method_at(rt borrow decision_from_first, 0).is_none());
