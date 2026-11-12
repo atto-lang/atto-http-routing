@@ -13,12 +13,15 @@ route snapshot and checks that the earlier decision cannot authorize it.
 The secure `tests/router_generation_authority.expected.txt` requires **ten
 `true` lines**. The first three are positive controls, followed by three
 foreign-router rejection checks, a construction control and three
-replacement-snapshot rejection checks. On the historical baseline (#51) this fixture was an executed, **deliberately
-failing security acceptance test**. The follow-up branch now adds a per-snapshot
-private object-identity witness to `Router` and `Decision`. The ten-line secure
-golden remains UNCHANGED; the candidate must be compiled and executed at its
-new exact head before any passing claim. Do not add it to the default green
-suite until real guest output matches the secure golden.
+replacement-snapshot rejection checks. On historical baseline #51 this fixture was deliberately failing. The candidate
+adds a per-snapshot private object-identity witness to `Router` and `Decision`.
+The exact-blob Java guest run [#43155812579](https://github.com/gha-indie-worker/gha-indie-worker-docs/actions/runs/43155812579)
+ran the baseline and patched router scripts, passed all ten secure golden lines,
+and proved that deleting the witness admission check makes the prior six
+security assertions fail again. The candidate source blob was `1616ab5d...`.
+The ten-line secure golden remains **unchanged** and is now run from the default
+`scripts/test.sh`. This was verified as a selected original source blob on the
+private mirror, not as a full Git tree recreation of the new PR head.
 
 ## Execute with the exact pinned compiler
 
@@ -58,6 +61,7 @@ tenants and supervisors, actor restart/endpoint reuse, hot-upgrade in-flight
 drain/abort, immutable reader/exclusive writer safety, physical quiescence
 and mutated authority-check deletion. LLVM, .NET and NativeAOT parity must be
 established independently. The existing `scripts/test.sh` remains the green behavioral regression suite;
-`test-router-generation-authority.sh` is a separate mandatory candidate gate
-until it has executed successfully and independent review approves promotion.
-Source PR head and original compiler tree/blobs must be verified separately.
+`test-router-generation-authority.sh` is now invoked by `scripts/test.sh`.
+It proves only same-runtime snapshot separation. Independent security review,
+exact new PR-head/tree reconstruction and further runtime authority testing
+remain pending; the full #52 release gate remains OPEN.
