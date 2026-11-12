@@ -7,28 +7,41 @@ trap 'rm -rf "$tmp"' EXIT
 project="$tmp/project with spaces"
 mkdir -p "$project/scripts" "$project/tests" "$tmp/bin"
 cp "$root/scripts/test.sh" "$project/scripts/test.sh"
+cp "$root/scripts/test-router-generation-authority.sh" "$project/scripts/test-router-generation-authority.sh"
 cp "$root/SOURCE_REF" "$project/SOURCE_REF"
 cp "$root/tests/expected.txt" "$project/tests/expected.txt"
 cp "$root/tests/router_semantics.atto" "$project/tests/router_semantics.atto"
+cp "$root/tests/router_generation_authority.expected.txt" "$project/tests/router_generation_authority.expected.txt"
+cp "$root/tests/router_generation_authority.atto" "$project/tests/router_generation_authority.atto"
 cat > "$tmp/bin/compiler" <<'COMPILER'
 #!/usr/bin/env bash
 set -euo pipefail
 test "$PWD" = "$RUNNER_PROJECT"
-test "${@: -1}" = "$RUNNER_PROJECT/tests/router_semantics.atto"
+case "${@: -1}" in
+  "$RUNNER_PROJECT/tests/router_semantics.atto")
+    suite=normal
+    expected="$RUNNER_PROJECT/tests/expected.txt"
+    ;;
+  "$RUNNER_PROJECT/tests/router_generation_authority.atto")
+    suite=authority
+    expected="$RUNNER_PROJECT/tests/router_generation_authority.expected.txt"
+    ;;
+  *) echo "Unexpected native entrypoint" >&2; exit 65;;
+esac
 if [[ "$1" = --check ]]; then
   test "$#" = 3
   test "$2" = --platform=server
-  echo check >> "$RUNNER_LOG"
+  echo "check-$suite" >> "$RUNNER_LOG"
   [[ "${RUNNER_CASE:-}" != check-failure ]] || exit 42
 else
   test "$#" = 2
   test "$1" = --platform=server
-  echo run >> "$RUNNER_LOG"
+  echo "run-$suite" >> "$RUNNER_LOG"
   [[ "${RUNNER_CASE:-}" != runtime-failure ]] || exit 43
   if [[ "${RUNNER_CASE:-}" = wrong-output ]]; then
     echo incorrect
   else
-    cat "$RUNNER_PROJECT/tests/expected.txt"
+    cat "$expected"
   fi
 fi
 COMPILER
@@ -50,7 +63,7 @@ git -C "$tmp/source" -c user.name=Runner -c user.email=runner@example.invalid co
 git -C "$tmp/source" rev-parse HEAD > "$project/SOURCE_REF"
 export ORESLANG_SOURCE_DIR="$tmp/source"
 bash "$project/scripts/test.sh"
-test "$(cat "$RUNNER_LOG")" = $'check\nrun'
+test "$(cat "$RUNNER_LOG")" = $'check-normal\nrun-normal\ncheck-authority\nrun-authority'
 for scenario in check-failure runtime-failure wrong-output; do
   : > "$RUNNER_LOG"
   if RUNNER_CASE="$scenario" bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
@@ -58,7 +71,7 @@ for scenario in check-failure runtime-failure wrong-output; do
     exit 1
   fi
   if [[ "$scenario" = check-failure ]]; then
-    test "$(cat "$RUNNER_LOG")" = check
+    test "$(cat "$RUNNER_LOG")" = check-normal
   fi
 done
 if ORESLANG_COMPILER="$tmp/missing" bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
