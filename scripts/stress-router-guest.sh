@@ -36,7 +36,11 @@ fi
 if [[ "$(git -C "$source_root" rev-parse HEAD)" != "$pin" ]]; then
   echo "Compiler HEAD does not match SOURCE_REF" >&2; exit 65
 fi
-if [[ -n "$(git -C "$source_root" status --porcelain --untracked-files=all)" ]]; then
+source_status="$(git -C "$source_root" status --porcelain --untracked-files=all)" || {
+  echo "Cannot inspect compiler source cleanliness" >&2
+  exit 65
+}
+if [[ -n "$source_status" ]]; then
   echo "Compiler source must be clean" >&2; exit 65
 fi
 
