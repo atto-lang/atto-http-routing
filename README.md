@@ -162,3 +162,14 @@ fixture (automatic-HEAD registration and rejecting an over-limit route).
 
 See [the compiler compatibility contract](docs/BACKENDS.md) for pinned Java/LLVM
 revisions, reproducible checks, and unsupported features.
+
+## Repository ownership and migration (2026-11-08)
+
+**AttoLang** is the current public language; this code is still maintained under `ores-truffle-oreslang/oreslang-http-routing` in the original Oreslang organization. Preserve working `.ores` files, repo naming and package/CLI compatibility until an independently tested change migrates them.
+
+- **Owns:** pure HTTP route matcher, typed request/routing policy and security regression fixtures.
+- **Not this repository:** deployment ingress gateways, load balancing or hosted billing.
+- **Code ownership:** [atto-lang](https://github.com/atto-lang) is the destination for language semantics, core/std, compilers, developer tools, libraries and demos. [atto-co](https://github.com/atto-co) independently owns managed infrastructure, tenancy, identity, billing and production deployments. A separate `atto-*` repo is not by itself a verified Git transfer or equivalent source tree.
+- **Proposed migration, not authorization:** existing repository into `atto-lang/oreslang-http-routing` with original name, history and numeric GitHub ID; no first-wave direct move into `atto-co`. A later production product spinout requires its own approval.
+
+**Repository transfer playbook:** coordinate in [issue #26](https://github.com/ores-truffle-oreslang/.github/issues/26) and review [private migration draft #25](https://github.com/ores-truffle-oreslang/.github/pull/25). Capture stable numeric ID, exact head SHA/tree, PRs, releases, packages, GitHub Pages, dependencies, branch/ruleset protections, Actions runners, secrets, App/webhook grants and rollback plan. Require explicit source and target administrators plus independent security reviewer. Never export/mirror private sources as a shortcut. After an actual GitHub ownership transfer, verify unchanged ID/history/tree, re-bind security controls and run exact-head CI. A job with `steps=[]` or `steps=null` is `NOT_EXECUTED`, and host/reference results do not prove compiled AttoLang guest or production HTTP execution.
