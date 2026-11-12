@@ -94,6 +94,8 @@ contract without changing the compiled router or match semantics.
 
 ## HTTP behavior
 
+- Registrations admit only canonical uppercase ASCII HTTP tchar tokens; unsafe
+  method bytes are rejected before builder mutation to protect `Allow` metadata.
 - Exact method wins.
 - `any(...)` registers `*` as an explicit catch-all method.
 - HEAD falls back to GET by default and sets `decision.suppress_body = true`.
@@ -109,6 +111,8 @@ contract without changing the compiled router or match semantics.
 
 ## Safety and performance
 
+- The optional `request_path_checked()` rejects decoded `.` and `..` segments
+  without double-decoding or collapsing significant trailing separators.
 - No regex engine in the core matcher, so route matching has no regex-ReDoS
   surface.
 - Request path length and total matcher steps are bounded.
