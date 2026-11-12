@@ -19,7 +19,8 @@ actual="$(mktemp "${TMPDIR:-/tmp}/atto-generation-auth.XXXXXX")"
 trap 'rm -f "$actual"' EXIT
 "$compiler" --check --platform=server "$entry"
 "$compiler" --platform=server "$entry" > "$actual"
-# EXPECTED TO FAIL until unforgeable router-instance/generation authority exists.
-# Never invert this assertion or teach CI to accept the vulnerable behavior.
+# Required same-runtime snapshot regression: ten true lines, no exceptions.
+# Never invert the assertion or accept the vulnerable six-false baseline.
+# This is NOT a test of supervisor/cross-isolate runtime-minted authority.
 diff -u "$repo_root/tests/router_generation_authority.expected.txt" "$actual"
 echo "router generation authority: PASS"
