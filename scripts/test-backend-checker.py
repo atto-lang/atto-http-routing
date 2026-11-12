@@ -57,14 +57,24 @@ class BackendChecks(unittest.TestCase):
         for code,ir in [(1,valid),(-11,valid),(0,''),(0,'define i64 @main() { ret i64 42 }')]:
             with self.subTest(code=code,ir=ir), self.assertRaises(RuntimeError):
                 checker.check_positive(subprocess.CompletedProcess([],code,ir,'failure'))
-    def test_positive_control_rejects_spoofed_main_and_stderr(self):
-        valid='define i32 @main() {\n ret i32 42\n}\n'
-        for ir in ('; '+valid, 'define i32 @main()\\n', 'declare i32 @main()\\n',
-                   'define i32 @main() ; absent body\\n', valid+valid):
+    def test_positive_control_rejects_spoofed_ir_and_stderr(self):
+        valid = 'define i32 @main() {\n ret i32 42\n}\n'
+        rejected = [
+            '; ' + valid,
+            'declare i32 @main()\n',
+            'define i32 @main()\n',
+            'define i32 @main() ; no body\n',
+            'define i32 @main() {\n',
+            'define i32 @main() {\n}\n',
+            valid + valid,
+            'define i32 @main() {\n}\n' + valid,
+        ]
+        for ir in rejected:
             with self.subTest(ir=ir), self.assertRaises(RuntimeError):
                 checker.check_positive(subprocess.CompletedProcess([], 0, ir, ''))
         with self.assertRaises(RuntimeError):
-            checker.check_positive(subprocess.CompletedProcess([], 0, valid, 'unexpected compiler warning'))
+            checker.check_positive(subprocess.CompletedProcess([], 0, valid, 'warning'))
+        checker.check_positive(subprocess.CompletedProcess([], 0, valid, ''))
 
     def test_empty_probes_rejected(self):
         self.contract['llvm']['rejection_probes'] = []
