@@ -23,9 +23,27 @@ pub routine main() -> void {
   val denied = first.resolve("POST", http_routing.request_path(arr["items", "alice"]));
   stdio.println(denied.is_method_not_allowed());
   stdio.println(first.allow_count(rt borrow denied) == 3);
-  stdio.println(first.allow_method_at(rt borrow denied, 0).unwrap() == "GET");
-  stdio.println(first.allow_method_at(rt borrow denied, 1).unwrap() == "HEAD");
-  stdio.println(first.allow_method_at(rt borrow denied, 2).unwrap() == "OPTIONS");
+  val allow_get = first.allow_method_at(rt borrow denied, 0);
+  if allow_get.is_none(); then
+    // Invalid Decision metadata must fail the golden, not panic on unwrap.
+    stdio.println(false);
+  else
+    stdio.println(allow_get.unwrap() == "GET");
+  fi
+  val allow_head = first.allow_method_at(rt borrow denied, 1);
+  if allow_head.is_none(); then
+    // Invalid Decision metadata must fail the golden, not panic on unwrap.
+    stdio.println(false);
+  else
+    stdio.println(allow_head.unwrap() == "HEAD");
+  fi
+  val allow_options = first.allow_method_at(rt borrow denied, 2);
+  if allow_options.is_none(); then
+    // Invalid Decision metadata must fail the golden, not panic on unwrap.
+    stdio.println(false);
+  else
+    stdio.println(allow_options.unwrap() == "OPTIONS");
+  fi
   stdio.println(second.capture_one(rt borrow denied, "id").is_none());
   stdio.println(second.allow_count(rt borrow denied) == 0);
   stdio.println(second.allow_method_at(rt borrow denied, 0).is_none());
