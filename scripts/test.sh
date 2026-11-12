@@ -47,4 +47,29 @@ cd "$repo_root"
 "$compiler" --platform=server "$entry" > "$actual"
 
 diff -u "$repo_root/tests/expected.txt" "$actual"
+
+# Deterministic native guest regressions with exact expected stdout.
+for guest in "$repo_root"/tests/guest_*.atto; do
+  [[ -f "$guest" ]] || continue
+  if [[ -L "$guest" ]]; then
+    echo "guest source must not be a symlink: $guest" >&2
+    exit 65
+  fi
+  golden="${guest%.atto}.expected"
+  if [[ ! -f "$golden" || -L "$golden" ]]; then
+    echo "guest golden missing or symlinked: $golden" >&2
+    exit 65
+  fi
+  "$compiler" --check --platform=server "$guest"
+  "$compiler" --platform=server "$guest" > "$actual"
+  diff -u "$golden" "$actual"
+  echo "guest fixture $(basename "$guest"): PASS"
+done
+for golden in "$repo_root"/tests/guest_*.expected; do
+  [[ -f "$golden" ]] || continue
+  if [[ -L "$golden" || ! -f "${golden%.expected}.atto" ]]; then
+    echo "orphan or symlinked guest golden: $golden" >&2
+    exit 65
+  fi
+done
 echo "router semantics: PASS"
