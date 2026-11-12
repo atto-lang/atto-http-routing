@@ -1,4 +1,4 @@
-# Router-generation authority: pending negative acceptance gate
+# Router-generation identity fence: candidate guest acceptance gate
 
 Security issue: [#52](https://github.com/ores-truffle-oreslang/oreslang-http-routing/issues/52). Parent integration: Router #51.
 
@@ -13,9 +13,12 @@ route snapshot and checks that the earlier decision cannot authorize it.
 The secure `tests/router_generation_authority.expected.txt` requires **ten
 `true` lines**. The first three are positive controls, followed by three
 foreign-router rejection checks, a construction control and three
-replacement-snapshot rejection checks. The test presently is a **deliberately
-failing security acceptance test**, not a passing regression or shipped feature.
-Do not add it to the default all-green suite or weaken the golden.
+replacement-snapshot rejection checks. On the historical baseline (#51) this fixture was an executed, **deliberately
+failing security acceptance test**. The follow-up branch now adds a per-snapshot
+private object-identity witness to `Router` and `Decision`. The ten-line secure
+golden remains UNCHANGED; the candidate must be compiled and executed at its
+new exact head before any passing claim. Do not add it to the default green
+suite until real guest output matches the secure golden.
 
 ## Execute with the exact pinned compiler
 
@@ -33,7 +36,14 @@ test receipt to distinguish them. Preserve original Git head/tree identities
 for the router and compiler. This fixture has **not** been executed merely by
 committing it.
 
-## Completion contract (not implemented in this PR)
+## Candidate scope and completion contract
+
+The current candidate uses **guest object-reference identity** (`is`) to fence
+snapshot metadata inspection. This is stronger than route-table replay and
+rejects identically configured foreign routers under same-runtime identity
+semantics, but is **not** a runtime-minted capability, has no supervisor epoch,
+and does not independently enforce actor/tenant authorization. It is a staged
+mitigation, NOT completion of issue #52.
 
 A runtime-minted opaque capability, inaccessible to guest constructors, must
 bind route authorization to an immutable router snapshot, tenant, supervisor
@@ -47,5 +57,7 @@ Additional runtime/compiler-backed negative cases are needed before closing
 tenants and supervisors, actor restart/endpoint reuse, hot-upgrade in-flight
 drain/abort, immutable reader/exclusive writer safety, physical quiescence
 and mutated authority-check deletion. LLVM, .NET and NativeAOT parity must be
-established independently. The existing `scripts/test.sh` remains the green
-behavioral regression suite; this file is an explicit **unmet release gate**.
+established independently. The existing `scripts/test.sh` remains the green behavioral regression suite;
+`test-router-generation-authority.sh` is a separate mandatory candidate gate
+until it has executed successfully and independent review approves promotion.
+Source PR head and original compiler tree/blobs must be verified separately.
