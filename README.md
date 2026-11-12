@@ -70,7 +70,7 @@ table.
 Patterns are currently constructed from segments:
 
 - `literal("users")` — exact segment
-- `param("id")` — one named segment
+- `param("id")` — one **non-empty decoded** named segment
 - `wildcard("rest")` — zero or more remaining segments; must be last
 - `root()` — root path
 

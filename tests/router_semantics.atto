@@ -231,5 +231,56 @@ pub routine main() -> void {
   stdio.println(winner_router.allow_count(rt borrow param_only_decision));
   stdio.println(winner_router.allow_method_at(rt borrow param_only_decision, 0).is_none());
 
+  // Empty decoded segments cannot be captured by a named parameter.
+  // Explicit empty literals and terminal wildcards remain routeable.
+  val required = http_routing.path("/required/{id}", arr[
+    http_routing.literal("required"), http_routing.param("id")
+  ]);
+  val required_tail = http_routing.path("/required/{id}/tail", arr[
+    http_routing.literal("required"), http_routing.param("id"), http_routing.literal("tail")
+  ]);
+  val explicit_slash = http_routing.path("/required/", arr[
+    http_routing.literal("required"), http_routing.literal("")
+  ]);
+  val strict_builder = http_routing.builder();
+  ok(strict_builder.get(rt borrow required, 301));
+  ok(strict_builder.get(rt borrow required_tail, 302));
+  ok(strict_builder.get(rt borrow explicit_slash, 303));
+  val strict_router = strict_builder.build();
+  stdio.println(strict_router.resolve(
+    "GET", http_routing.request_path(arr["required", "value"])
+  ).handler_id == 301);
+  stdio.println(strict_router.resolve(
+    "GET", http_routing.request_path(arr["required", ""])
+  ).handler_id == 303);
+  stdio.println(strict_router.resolve(
+    "GET", http_routing.request_path(arr["required", "", "tail"])
+  ).is_not_found());
+  stdio.println(strict_router.resolve(
+    "GET", http_routing.request_path(arr["required", "value", "tail"])
+  ).handler_id == 302);
+  stdio.println(strict_router.resolve(
+    "GET", http_routing.request_path(arr["required"])
+  ).is_not_found());
+  val only_parameter_builder = http_routing.builder();
+  ok(only_parameter_builder.get(rt borrow required, 401));
+  val only_parameter_router = only_parameter_builder.build();
+  stdio.println(only_parameter_router.resolve(
+    "GET", http_routing.request_path(arr["required", ""])
+  ).is_not_found());
+  val wildcard_required = http_routing.path("/required/*rest", arr[
+    http_routing.literal("required"), http_routing.wildcard("rest")
+  ]);
+  val wildcard_builder = http_routing.builder();
+  ok(wildcard_builder.get(rt borrow required, 501));
+  ok(wildcard_builder.get(rt borrow wildcard_required, 502));
+  val wildcard_router = wildcard_builder.build();
+  stdio.println(wildcard_router.resolve(
+    "GET", http_routing.request_path(arr["required", ""])
+  ).handler_id == 502);
+  stdio.println(wildcard_router.resolve(
+    "GET", http_routing.request_path(arr["required", "value"])
+  ).handler_id == 501);
+
   return;
 }
