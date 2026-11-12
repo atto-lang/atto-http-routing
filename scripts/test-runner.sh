@@ -10,11 +10,29 @@ cp "$root/scripts/test.sh" "$project/scripts/test.sh"
 cp "$root/SOURCE_REF" "$project/SOURCE_REF"
 cp "$root/tests/expected.txt" "$project/tests/expected.txt"
 cp "$root/tests/router_semantics.atto" "$project/tests/router_semantics.atto"
+# Match the real suite's fixture discovery and committed goldens.
+for fixture in "$root"/tests/guest_*.atto "$root"/tests/guest_*.expected; do
+  [[ -f "$fixture" ]] || continue
+  cp "$fixture" "$project/tests/"
+done
 cat > "$tmp/bin/compiler" <<'COMPILER'
 #!/usr/bin/env bash
 set -euo pipefail
 test "$PWD" = "$RUNNER_PROJECT"
-test "${@: -1}" = "$RUNNER_PROJECT/tests/router_semantics.atto"
+entry="${@: -1}"
+case "$entry" in
+  "$RUNNER_PROJECT/tests/router_semantics.atto")
+    golden="$RUNNER_PROJECT/tests/expected.txt"
+    ;;
+  "$RUNNER_PROJECT/tests/guest_"*.atto)
+    golden="${entry%.atto}.expected"
+    [[ -f "$golden" ]] || { echo "missing guest golden" >&2; exit 65; }
+    ;;
+  *)
+    echo "unexpected compiler fixture: $entry" >&2
+    exit 65
+    ;;
+esac
 if [[ "$1" = --check ]]; then
   test "$#" = 3
   test "$2" = --platform=server
@@ -28,7 +46,7 @@ else
   if [[ "${RUNNER_CASE:-}" = wrong-output ]]; then
     echo incorrect
   else
-    cat "$RUNNER_PROJECT/tests/expected.txt"
+    cat "$golden"
   fi
 fi
 COMPILER
@@ -50,7 +68,98 @@ git -C "$tmp/source" -c user.name=Runner -c user.email=runner@example.invalid co
 git -C "$tmp/source" rev-parse HEAD > "$project/SOURCE_REF"
 export ORESLANG_SOURCE_DIR="$tmp/source"
 bash "$project/scripts/test.sh"
-test "$(cat "$RUNNER_LOG")" = $'check\nrun'
+expected_invocations=
+for scenario in check-failure runtime-failure wrong-output; do
+  : > "$RUNNER_LOG"
+  if RUNNER_CASE="$scenario" bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
+    echo "runner accepted $scenario" >&2
+    exit 1
+  fi
+  if [[ "$scenario" = check-failure ]]; then
+    test "$(cat "$RUNNER_LOG")" = check
+  fi
+done
+if ORESLANG_COMPILER="$tmp/missing" bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
+  echo "missing compiler accepted" >&2
+  exit 1
+fi
+printf 'main\n' > "$project/SOURCE_REF"
+if bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
+  echo "floating compiler revision accepted" >&2
+  exit 1
+fi
+grep -q 'full lowercase Git commit SHA' "$tmp/output"
+git -C "$tmp/source" rev-parse HEAD > "$project/SOURCE_REF"
+ORESLANG_SOURCE_DIR="$tmp/source" bash "$project/scripts/test.sh"
+printf 'dirty\n' >> "$tmp/source/tracked"
+if ORESLANG_SOURCE_DIR="$tmp/source" bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
+  echo "dirty compiler checkout accepted" >&2
+  exit 1
+fi
+grep -q 'must be clean' "$tmp/output"
+git -C "$tmp/source" restore tracked
+# A failed status command must not be mistaken for an empty/clean status.
+git() {
+  if [[ "$*" == *" status "* ]]; then return 128; fi
+  command git "$@"
+}
+export -f git
+if bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
+  echo "unreadable compiler status accepted" >&2
+  exit 1
+fi
+grep -q 'cannot inspect compiler checkout status' "$tmp/output"
+unset -f git
+echo "runner contracts: PASS"
+check\nrun'
+for fixture in "$project"/tests/guest_*.atto; do
+  [[ -f "$fixture" ]] || continue
+  expected_invocations+=
+for scenario in check-failure runtime-failure wrong-output; do
+  : > "$RUNNER_LOG"
+  if RUNNER_CASE="$scenario" bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
+    echo "runner accepted $scenario" >&2
+    exit 1
+  fi
+  if [[ "$scenario" = check-failure ]]; then
+    test "$(cat "$RUNNER_LOG")" = check
+  fi
+done
+if ORESLANG_COMPILER="$tmp/missing" bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
+  echo "missing compiler accepted" >&2
+  exit 1
+fi
+printf 'main\n' > "$project/SOURCE_REF"
+if bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
+  echo "floating compiler revision accepted" >&2
+  exit 1
+fi
+grep -q 'full lowercase Git commit SHA' "$tmp/output"
+git -C "$tmp/source" rev-parse HEAD > "$project/SOURCE_REF"
+ORESLANG_SOURCE_DIR="$tmp/source" bash "$project/scripts/test.sh"
+printf 'dirty\n' >> "$tmp/source/tracked"
+if ORESLANG_SOURCE_DIR="$tmp/source" bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
+  echo "dirty compiler checkout accepted" >&2
+  exit 1
+fi
+grep -q 'must be clean' "$tmp/output"
+git -C "$tmp/source" restore tracked
+# A failed status command must not be mistaken for an empty/clean status.
+git() {
+  if [[ "$*" == *" status "* ]]; then return 128; fi
+  command git "$@"
+}
+export -f git
+if bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
+  echo "unreadable compiler status accepted" >&2
+  exit 1
+fi
+grep -q 'cannot inspect compiler checkout status' "$tmp/output"
+unset -f git
+echo "runner contracts: PASS"
+\ncheck\nrun'
+done
+test "$(cat "$RUNNER_LOG")" = "$expected_invocations"
 for scenario in check-failure runtime-failure wrong-output; do
   : > "$RUNNER_LOG"
   if RUNNER_CASE="$scenario" bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
