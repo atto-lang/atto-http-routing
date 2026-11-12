@@ -208,6 +208,12 @@ define module http_routing as
     pub path() -> RequestPath {
       return self.path_value;
     }
+
+    // The witness stays private to Decision; callers may compare only against
+    // a held Router snapshot witness. This is not an authorization grant.
+    pub from_generation(borrow RouterGenerationWitness expected) -> bool {
+      return self.generation_witness is expected;
+    }
   end
 
   // Mutable construction node. This representation is used only while routes
@@ -768,7 +774,7 @@ define module http_routing as
       // Reject foreign and replacement-snapshot Decisions before reading any
       // endpoint index. The 'is' operator compares guest reference identity;
       // equal route tables and identical IDs cannot forge the local witness.
-      if !(decision.generation_witness is self.generation_witness); then
+      if !decision.from_generation(rt borrow self.generation_witness); then
         return -1;
       fi
       if decision.endpoint_index < 0 || decision.endpoint_index >= self.endpoints.size; then
