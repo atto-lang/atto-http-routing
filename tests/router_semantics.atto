@@ -231,5 +231,33 @@ pub routine main() -> void {
   stdio.println(winner_router.allow_count(rt borrow param_only_decision));
   stdio.println(winner_router.allow_method_at(rt borrow param_only_decision, 0).is_none());
 
+
+  // Method registration must never poison the HTTP Allow response.
+  val method_builder = http_routing.builder();
+  stdio.println(method_builder.route("M-SEARCH", rt borrow health, 300).is_ok());
+  stdio.println(method_builder.route("GET\r\nX-Injected: true", rt borrow health, 301).is_err());
+  stdio.println(method_builder.route("GET, POST", rt borrow health, 302).is_err());
+  stdio.println(method_builder.route("GET POST", rt borrow health, 303).is_err());
+  stdio.println(method_builder.route("GET\t", rt borrow health, 304).is_err());
+  stdio.println(method_builder.route("GET\u0000", rt borrow health, 305).is_err());
+  stdio.println(method_builder.route("GET:", rt borrow health, 306).is_err());
+  stdio.println(method_builder.route("get", rt borrow health, 307).is_err());
+  stdio.println(method_builder.route("GÉT", rt borrow health, 308).is_err());
+  val method_router = method_builder.build();
+  stdio.println(method_router.resolve(
+    "M-SEARCH", http_routing.request_path(arr["health"])
+  ).handler_id == 300);
+  val method_rejected_decision = method_router.resolve(
+    "POST", http_routing.request_path(arr["health"])
+  );
+  stdio.println(method_router.allow_count(rt borrow method_rejected_decision) == 2);
+
+  // Checked decoded-segment admission: do not double-decode or re-split slashes.
+  stdio.println(http_routing.request_path_checked(arr["docs", "."]).is_err());
+  stdio.println(http_routing.request_path_checked(arr["docs", ".."]).is_err());
+  stdio.println(http_routing.request_path_checked(arr["docs", "a/b"]).is_ok());
+  stdio.println(http_routing.request_path_checked(arr["docs", ""]).is_ok());
+  stdio.println(http_routing.request_path_checked(arr["%2E%2E"]).is_ok());
+
   return;
 }
