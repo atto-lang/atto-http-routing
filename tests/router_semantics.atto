@@ -247,10 +247,10 @@ pub routine main() -> void {
   stdio.println(method_router.resolve(
     "M-SEARCH", http_routing.request_path(arr["health"])
   ).handler_id == 300);
-  val wrong_method = method_router.resolve(
+  val method_rejected_decision = method_router.resolve(
     "POST", http_routing.request_path(arr["health"])
   );
-  stdio.println(method_router.allow_count(rt borrow wrong_method) == 2);
+  stdio.println(method_router.allow_count(rt borrow method_rejected_decision) == 2);
 
   // Checked decoded-segment admission: do not double-decode or re-split slashes.
   stdio.println(http_routing.request_path_checked(arr["docs", "."]).is_err());
