@@ -154,6 +154,82 @@ pub routine main() -> void {
   );
   stdio.println(limited_builder.get(rt borrow users_edit, 201).is_err());
 
+  // Blank named segments are not legal matches; a literal empty route
+  // segment remains a separate, intentionally registered route shape.
+  stdio.println(router.resolve(
+    "GET", http_routing.request_path(arr["users", "", "edit"])
+  ).is_not_found());
+
+  // A decision belongs to the table that produced it, even if the other
+  // table has the same route template and an overlapping endpoint index.
+  val foreign_builder = http_routing.builder();
+  ok(foreign_builder.get(rt borrow root, 999));
+  val foreign_router = foreign_builder.build();
+  val foreign_decision = foreign_router.resolve(
+    "GET", http_routing.request_path(new Array<String>())
+  );
+  stdio.println(router.allow_count(rt borrow foreign_decision));
+  stdio.println(router.allow_method_at(rt borrow foreign_decision, 0).is_none());
+  stdio.println(router.capture(rt borrow foreign_decision, "id").is_none());
+
+  // Deliberately misleading canonical template and handler ID: a different
+  // route shape cannot authorize this router's root Allow list.
+  val deceptive_builder = http_routing.builder();
+  val deceptive_root = http_routing.path("/", arr[http_routing.literal("foreign")]);
+  ok(deceptive_builder.get(rt borrow deceptive_root, 1));
+  val deceptive_router = deceptive_builder.build();
+  val deceptive_decision = deceptive_router.resolve(
+    "GET", http_routing.request_path(arr["foreign"])
+  );
+  stdio.println(router.allow_count(rt borrow deceptive_decision));
+  stdio.println(router.allow_method_at(rt borrow deceptive_decision, 0).is_none());
+
+  // Same template/target IDs, but a different literal path. Reject both
+  // parameter capture and Allow access for the foreign router's decision.
+  val capture_builder = http_routing.builder();
+  val capture_route = http_routing.path("/users/{id}", arr[
+    http_routing.literal("users"), http_routing.param("id")
+  ]);
+  ok(capture_builder.get(rt borrow capture_route, 700));
+  val capture_router = capture_builder.build();
+  val deceptive_capture_builder = http_routing.builder();
+  val deceptive_capture_route = http_routing.path("/users/{id}", arr[
+    http_routing.literal("foreign"), http_routing.param("id")
+  ]);
+  ok(deceptive_capture_builder.get(rt borrow deceptive_capture_route, 700));
+  val deceptive_capture_router = deceptive_capture_builder.build();
+  val deceptive_capture_decision = deceptive_capture_router.resolve(
+    "GET", http_routing.request_path(arr["foreign", "secret"])
+  );
+  stdio.println(capture_router.capture_one(rt borrow deceptive_capture_decision, "id").is_none());
+  stdio.println(capture_router.allow_count(rt borrow deceptive_capture_decision));
+
+
+  // Adversarial winning-route replay: both routers expose the same parameter
+  // endpoint at index 0 with identical target metadata, and the foreign
+  // decision's path matches that endpoint's shape. The receiving router has
+  // a more-specific literal winner, so only bounded local replay rejects it.
+  val winner_builder = http_routing.builder();
+  ok(winner_builder.get(rt borrow capture_route, 700));
+  val winner_literal = http_routing.path("/users/admin", arr[
+    http_routing.literal("users"), http_routing.literal("admin")
+  ]);
+  ok(winner_builder.get(rt borrow winner_literal, 701));
+  val winner_router = winner_builder.build();
+
+  val param_only_builder = http_routing.builder();
+  ok(param_only_builder.get(rt borrow capture_route, 700));
+  val param_only_router = param_only_builder.build();
+  val param_only_decision = param_only_router.resolve(
+    "GET", http_routing.request_path(arr["users", "admin"])
+  );
+  stdio.println(winner_router.resolve(
+    "GET", http_routing.request_path(arr["users", "admin"])
+  ).handler_id);
+  stdio.println(param_only_decision.handler_id);
+  stdio.println(winner_router.capture_one(rt borrow param_only_decision, "id").is_none());
+  stdio.println(winner_router.allow_count(rt borrow param_only_decision));
+  stdio.println(winner_router.allow_method_at(rt borrow param_only_decision, 0).is_none());
 
   // Empty decoded segments cannot be captured by a named parameter.
   // Explicit empty literals and terminal wildcards remain routeable.
