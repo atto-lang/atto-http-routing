@@ -160,6 +160,12 @@ define module http_routing as
     }
   end
 
+  // Identity is per immutable router snapshot, not derived from route data.
+  // Never serialize, log or expose this witness as public authority.
+  define class RouterGenerationWitness as
+    val int marker;
+  end
+
   // Decision kinds:
   // 0 = matched route
   // 1 = path not found
@@ -177,6 +183,7 @@ define module http_routing as
     pub val String route_template;
     pub val bool suppress_body;
     val RequestPath path_value;
+    val RouterGenerationWitness generation_witness;
 
     pub is_match() -> bool {
       return self.kind == 0;
@@ -519,7 +526,8 @@ define module http_routing as
         self.automatic_head_value,
         self.automatic_options_value,
         self.max_segments_value,
-        self.max_match_steps_value
+        self.max_match_steps_value,
+        new RouterGenerationWitness(0)
       );
     }
   end
@@ -537,6 +545,7 @@ define module http_routing as
     val bool automatic_options_value;
     val int max_segments_value;
     val int max_match_steps_value;
+    val RouterGenerationWitness generation_witness;
 
     static_child(int node_index, String segment) -> int {
       val int start = self.node_static_start.get(node_index);
@@ -655,18 +664,18 @@ define module http_routing as
 
     pub resolve(String method_value, RequestPath request_path_value) -> Decision {
       if request_path_value.size() > self.max_segments_value; then
-        return new Decision(4, -1, -1, -1, -1, -1, "", "", false, request_path_value.copy());
+        return new Decision(4, -1, -1, -1, -1, -1, "", "", false, request_path_value.copy(), self.generation_witness);
       fi
 
       let mut SearchBudget budget = new SearchBudget(self.max_match_steps_value);
       val int endpoint_index = self.match_node(0, 0, rt borrow request_path_value, rt mut borrow budget);
 
       if endpoint_index == -2; then
-        return new Decision(4, -1, -1, -1, -1, -1, "", "", false, request_path_value.copy());
+        return new Decision(4, -1, -1, -1, -1, -1, "", "", false, request_path_value.copy(), self.generation_witness);
       fi
 
       if endpoint_index < 0; then
-        return new Decision(1, -1, -1, -1, -1, -1, "", "", false, request_path_value.copy());
+        return new Decision(1, -1, -1, -1, -1, -1, "", "", false, request_path_value.copy(), self.generation_witness);
       fi
 
       val Endpoint endpoint = self.endpoints.get(endpoint_index);
@@ -684,7 +693,8 @@ define module http_routing as
           target.operation_id,
           endpoint.template(),
           method_value == "HEAD",
-          request_path_value.copy()
+          request_path_value.copy(),
+          self.generation_witness
         );
       fi
 
@@ -699,7 +709,8 @@ define module http_routing as
           "",
           endpoint.template(),
           false,
-          request_path_value.copy()
+          request_path_value.copy(),
+          self.generation_witness
         );
       fi
 
@@ -713,10 +724,15 @@ define module http_routing as
         "",
         endpoint.template(),
         false,
-        request_path_value.copy()
+        request_path_value.copy(),
+        self.generation_witness
       );
     }
 
+    // Same-runtime object identity is only a snapshot inspection fence.
+    // A Decision remains public metadata, not a cross-actor, supervisor or
+    // cross-isolate bearer capability. The owner must fence retired generations
+    // at admission; an old Router can still inspect its own in-flight work.
     // Decisions can be carried between callers and routers. Never use the
     // public endpoint/target indexes as unvalidated array indexes; a decision
     // from a different route table must not authorize captures or Allow data.
@@ -749,6 +765,12 @@ define module http_routing as
     }
 
     decision_endpoint(borrow Decision decision) -> int {
+      // Reject foreign and replacement-snapshot Decisions before reading any
+      // endpoint index. The 'is' operator compares guest reference identity;
+      // equal route tables and identical IDs cannot forge the local witness.
+      if !(decision.generation_witness is self.generation_witness); then
+        return -1;
+      fi
       if decision.endpoint_index < 0 || decision.endpoint_index >= self.endpoints.size; then
         return -1;
       fi
