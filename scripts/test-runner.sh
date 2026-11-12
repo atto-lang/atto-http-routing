@@ -10,11 +10,29 @@ cp "$root/scripts/test.sh" "$project/scripts/test.sh"
 cp "$root/SOURCE_REF" "$project/SOURCE_REF"
 cp "$root/tests/expected.txt" "$project/tests/expected.txt"
 cp "$root/tests/router_semantics.atto" "$project/tests/router_semantics.atto"
+# Mirror the production runner's committed guest-fixture discovery.
+for fixture in "$root"/tests/guest_*.atto "$root"/tests/guest_*.expected; do
+  [[ -f "$fixture" ]] || continue
+  cp "$fixture" "$project/tests/"
+done
 cat > "$tmp/bin/compiler" <<'COMPILER'
 #!/usr/bin/env bash
 set -euo pipefail
 test "$PWD" = "$RUNNER_PROJECT"
-test "${@: -1}" = "$RUNNER_PROJECT/tests/router_semantics.atto"
+entry="${@: -1}"
+case "$entry" in
+  "$RUNNER_PROJECT/tests/router_semantics.atto")
+    golden="$RUNNER_PROJECT/tests/expected.txt"
+    ;;
+  "$RUNNER_PROJECT/tests/guest_"*.atto)
+    golden="${entry%.atto}.expected"
+    [[ -f "$golden" ]] || { echo "missing guest golden" >&2; exit 65; }
+    ;;
+  *)
+    echo "unexpected compiler fixture: $entry" >&2
+    exit 65
+    ;;
+esac
 if [[ "$1" = --check ]]; then
   test "$#" = 3
   test "$2" = --platform=server
@@ -28,7 +46,7 @@ else
   if [[ "${RUNNER_CASE:-}" = wrong-output ]]; then
     echo incorrect
   else
-    cat "$RUNNER_PROJECT/tests/expected.txt"
+    cat "$golden"
   fi
 fi
 COMPILER
@@ -50,7 +68,12 @@ git -C "$tmp/source" -c user.name=Runner -c user.email=runner@example.invalid co
 git -C "$tmp/source" rev-parse HEAD > "$project/SOURCE_REF"
 export ORESLANG_SOURCE_DIR="$tmp/source"
 bash "$project/scripts/test.sh"
-test "$(cat "$RUNNER_LOG")" = $'check\nrun'
+expected_invocations=$'check\nrun'
+for fixture in "$project"/tests/guest_*.atto; do
+  [[ -f "$fixture" ]] || continue
+  expected_invocations+=$'\ncheck\nrun'
+done
+test "$(cat "$RUNNER_LOG")" = "$expected_invocations"
 for scenario in check-failure runtime-failure wrong-output; do
   : > "$RUNNER_LOG"
   if RUNNER_CASE="$scenario" bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
