@@ -115,4 +115,18 @@ if bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
 fi
 grep -q 'cannot inspect compiler checkout status' "$tmp/output"
 unset -f git
+# Broken symlinks are not regular files: even dangling fixture paths must fail.
+ln -s "$tmp/nowhere-source" "$project/tests/guest_dangling.atto"
+if bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
+  echo "dangling guest source accepted" >&2; exit 1
+fi
+grep -q 'guest source must not be a symlink' "$tmp/output"
+rm "$project/tests/guest_dangling.atto"
+ln -s "$tmp/nowhere-golden" "$project/tests/guest_dangling.expected"
+if bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
+  echo "dangling guest golden accepted" >&2; exit 1
+fi
+grep -q 'orphan or symlinked guest golden' "$tmp/output"
+rm "$project/tests/guest_dangling.expected"
+bash "$project/scripts/test.sh"
 echo "runner contracts: PASS"

@@ -50,11 +50,11 @@ diff -u "$repo_root/tests/expected.txt" "$actual"
 
 # Deterministic native guest regressions with exact expected stdout.
 for guest in "$repo_root"/tests/guest_*.atto; do
-  [[ -f "$guest" ]] || continue
   if [[ -L "$guest" ]]; then
     echo "guest source must not be a symlink: $guest" >&2
     exit 65
   fi
+  [[ -f "$guest" ]] || continue
   golden="${guest%.atto}.expected"
   if [[ ! -f "$golden" || -L "$golden" ]]; then
     echo "guest golden missing or symlinked: $golden" >&2
@@ -66,8 +66,12 @@ for guest in "$repo_root"/tests/guest_*.atto; do
   echo "guest fixture $(basename "$guest"): PASS"
 done
 for golden in "$repo_root"/tests/guest_*.expected; do
+  if [[ -L "$golden" ]]; then
+    echo "orphan or symlinked guest golden: $golden" >&2
+    exit 65
+  fi
   [[ -f "$golden" ]] || continue
-  if [[ -L "$golden" || ! -f "${golden%.expected}.atto" ]]; then
+  if [[ ! -f "${golden%.expected}.atto" ]]; then
     echo "orphan or symlinked guest golden: $golden" >&2
     exit 65
   fi
