@@ -1,0 +1,29 @@
+import module http_routing from "../src/http_routing";
+
+pub routine main() -> void {
+  val route = http_routing.path("/files/{bucket}/*rest", arr[
+    http_routing.literal("files"), http_routing.param("bucket"), http_routing.wildcard("rest")
+  ]);
+  val b = http_routing.builder();
+  stdio.println(b.get(rt borrow route, 91).is_ok());
+  val router = b.build();
+  val deep = router.resolve("GET", http_routing.request_path(arr["files", "assets", "css", "main.css"]));
+  stdio.println(deep.handler_id == 91);
+  stdio.println(router.capture_one(rt borrow deep, "bucket").unwrap() == "assets");
+  val rest = router.capture(rt borrow deep, "rest").unwrap();
+  stdio.println(rest.size() == 2);
+  stdio.println(rest.at(0).unwrap() == "css");
+  stdio.println(rest.at(1).unwrap() == "main.css");
+  stdio.println(rest.at(2).is_none());
+  stdio.println(rest.one().is_none());
+  stdio.println(deep.path().size() == 4);
+  stdio.println(deep.path().segment_at(2) == "css");
+  val zero = router.resolve("GET", http_routing.request_path(arr["files", "assets"]));
+  stdio.println(zero.handler_id == 91);
+  stdio.println(router.capture(rt borrow zero, "rest").unwrap().size() == 0);
+  val trailing = router.resolve("GET", http_routing.request_path(arr["files", "assets", ""]));
+  stdio.println(router.capture(rt borrow trailing, "rest").unwrap().size() == 1);
+  stdio.println(router.capture(rt borrow trailing, "rest").unwrap().at(0).unwrap() == "");
+  stdio.println(router.resolve("GET", http_routing.request_path(arr["files", "", "css"])).is_not_found());
+  return;
+}
