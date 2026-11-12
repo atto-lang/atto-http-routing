@@ -1,0 +1,32 @@
+import module http_routing from "../src/http_routing";
+
+// Backtrack only when a more-specific path branch cannot complete.
+pub routine main() -> void {
+  val deep_static = http_routing.path("/a/b/c", arr[
+    http_routing.literal("a"), http_routing.literal("b"), http_routing.literal("c")
+  ]);
+  val dynamic = http_routing.path("/a/{id}/d", arr[
+    http_routing.literal("a"), http_routing.param("id"), http_routing.literal("d")
+  ]);
+  val literal_winner = http_routing.path("/a/b/d", arr[
+    http_routing.literal("a"), http_routing.literal("b"), http_routing.literal("d")
+  ]);
+  val builder = http_routing.builder();
+  stdio.println(builder.get(rt borrow deep_static, 91).is_ok());
+  stdio.println(builder.get(rt borrow dynamic, 92).is_ok());
+  val first = builder.build();
+  val fallback = first.resolve("GET", http_routing.request_path(arr["a", "b", "d"]));
+  stdio.println(fallback.handler_id == 92);
+  stdio.println(first.capture_one(rt borrow fallback, "id").unwrap() == "b");
+  stdio.println(first.resolve("GET", http_routing.request_path(arr["a", "b", "c"])).handler_id == 91);
+  stdio.println(first.resolve("GET", http_routing.request_path(arr["a", "e", "d"])).handler_id == 92);
+  stdio.println(first.resolve("GET", http_routing.request_path(arr["a", "", "d"])).is_not_found());
+  stdio.println(builder.post(rt borrow literal_winner, 93).is_ok());
+  val after = builder.build();
+  stdio.println(after.resolve("GET", http_routing.request_path(arr["a", "b", "d"])).is_method_not_allowed());
+  stdio.println(after.resolve("POST", http_routing.request_path(arr["a", "b", "d"])).handler_id == 93);
+  stdio.println(after.resolve("DELETE", http_routing.request_path(arr["a", "b", "d"])).is_method_not_allowed());
+  stdio.println(after.resolve("GET", http_routing.request_path(arr["a", "e", "d"])).handler_id == 92);
+  stdio.println(first.resolve("GET", http_routing.request_path(arr["a", "b", "d"])).handler_id == 92);
+  return;
+}
