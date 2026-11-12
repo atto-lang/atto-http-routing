@@ -862,7 +862,17 @@ define module http_routing as
           || target.operation_id != decision.operation_id; then
           return -1;
         fi
-      elif decision.kind != 2 && decision.kind != 3; then
+      elif decision.kind == 2 || decision.kind == 3; then
+        // 405 and automatic-OPTIONS are metadata-only decisions. They must
+        // never carry a route target, handler, pipeline or body-suppression
+        // flag. Defend against contradictory Decision metadata even when its
+        // snapshot witness is valid.
+        if decision.target_index != -1 || decision.handler_id != -1
+          || decision.pipeline_id != -1 || decision.contract_id != -1
+          || decision.operation_id != "" || decision.suppress_body; then
+          return -1;
+        fi
+      else
         return -1;
       fi
       return decision.endpoint_index;

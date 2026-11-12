@@ -1,0 +1,48 @@
+import module http_routing from "../src/http_routing";
+
+// Decision-kind boundary matrix, using identical route snapshots. All assertions
+// must print true; this tests inspection, not tenant/supervisor capabilities.
+pub routine main() -> void {
+  val route = http_routing.path("/items/{id}", arr[
+    http_routing.literal("items"), http_routing.param("id")
+  ]);
+  val first_builder = http_routing.builder();
+  val second_builder = http_routing.builder();
+  stdio.println(first_builder.get(rt borrow route, 77).is_ok());
+  stdio.println(second_builder.get(rt borrow route, 77).is_ok());
+  val first = first_builder.build();
+  val second = second_builder.build();
+
+  val found = first.resolve("GET", http_routing.request_path(arr["items", "alice"]));
+  stdio.println(found.is_match());
+  stdio.println(first.capture_one(rt borrow found, "id").unwrap() == "alice");
+  stdio.println(second.capture_one(rt borrow found, "id").is_none());
+  stdio.println(second.allow_count(rt borrow found) == 0);
+  stdio.println(second.allow_method_at(rt borrow found, 0).is_none());
+
+  val denied = first.resolve("POST", http_routing.request_path(arr["items", "alice"]));
+  stdio.println(denied.is_method_not_allowed());
+  stdio.println(first.allow_count(rt borrow denied) == 3);
+  stdio.println(first.allow_method_at(rt borrow denied, 0).unwrap() == "GET");
+  stdio.println(first.allow_method_at(rt borrow denied, 1).unwrap() == "HEAD");
+  stdio.println(first.allow_method_at(rt borrow denied, 2).unwrap() == "OPTIONS");
+  stdio.println(second.capture_one(rt borrow denied, "id").is_none());
+  stdio.println(second.allow_count(rt borrow denied) == 0);
+  stdio.println(second.allow_method_at(rt borrow denied, 0).is_none());
+
+  val options = first.resolve("OPTIONS", http_routing.request_path(arr["items", "alice"]));
+  stdio.println(options.is_automatic_options());
+  stdio.println(first.allow_count(rt borrow options) == 3);
+  stdio.println(first.allow_method_at(rt borrow options, 0).unwrap() == "GET");
+  stdio.println(second.capture_one(rt borrow options, "id").is_none());
+  stdio.println(second.allow_count(rt borrow options) == 0);
+  stdio.println(second.allow_method_at(rt borrow options, 0).is_none());
+
+  val rebuilt = first_builder.build();
+  stdio.println(rebuilt.allow_count(rt borrow denied) == 0);
+  stdio.println(rebuilt.allow_method_at(rt borrow options, 0).is_none());
+  stdio.println(rebuilt.capture_one(rt borrow found, "id").is_none());
+  stdio.println(first.allow_count(rt borrow denied) == 3);
+  stdio.println(first.allow_count(rt borrow options) == 3);
+  return;
+}

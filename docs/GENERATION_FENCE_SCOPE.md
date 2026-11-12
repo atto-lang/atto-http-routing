@@ -13,6 +13,11 @@ source or replacing the exact-golden native guest suite.
   public metadata, handler IDs and route templates are identical**.
 - The admission check occurs **before** trusting or indexing any Decision's
   public endpoint metadata. Existing path/target metadata validation remains.
+- The decision inspector also requires that 405/automatic-OPTIONS carry no
+  target index, handler, pipeline, contract, operation or suppressed-body flag.
+  Identity check alone never authorizes contradictory Decision metadata.
+- A separate 26-assertion decision-kind matrix tests local vs foreign
+  match, 405, automatic-OPTIONS and newly rebuilt snapshots.
 - The existing native guest fixture harness executes a 16-assertion
   `guest_generation_witness.atto` on real compiler, with exact golden stdout.
 
