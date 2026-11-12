@@ -48,3 +48,4 @@ cd "$repo_root"
 
 diff -u "$repo_root/tests/expected.txt" "$actual"
 echo "router semantics: PASS"
+ORESLANG_COMPILER="$compiler" bash "$repo_root/scripts/test-router-generation-authority.sh"
