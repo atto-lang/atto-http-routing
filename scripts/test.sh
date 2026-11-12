@@ -55,7 +55,7 @@ for guest in "$repo_root"/tests/guest_*.atto; do
     echo "guest source must not be a symlink: $guest" >&2
     exit 65
   fi
-  golden="\${guest%.atto}.expected"
+  golden="${guest%.atto}.expected"
   if [[ ! -f "$golden" || -L "$golden" ]]; then
     echo "guest golden missing or symlinked: $golden" >&2
     exit 65
@@ -67,7 +67,7 @@ for guest in "$repo_root"/tests/guest_*.atto; do
 done
 for golden in "$repo_root"/tests/guest_*.expected; do
   [[ -f "$golden" ]] || continue
-  if [[ -L "$golden" || ! -f "\${golden%.expected}.atto" ]]; then
+  if [[ -L "$golden" || ! -f "${golden%.expected}.atto" ]]; then
     echo "orphan or symlinked guest golden: $golden" >&2
     exit 65
   fi
