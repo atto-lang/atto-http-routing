@@ -14,10 +14,10 @@ if [[ ! -v ORESLANG_SOURCE_DIR || -z "$ORESLANG_SOURCE_DIR" ]]; then
   exit 64
 fi
 pin="$(tr -d '[:space:]' < "$root/SOURCE_REF")"
-if [[ ! "$attempts" =~ ^[0-9]+$ ]] || (( 10#$attempts < 1 || 10#$attempts > 128 )); then
+if [[ ! "$attempts" =~ ^[0-9]{1,3}$ ]] || (( 10#$attempts < 1 || 10#$attempts > 128 )); then
   echo "ROUTER_STRESS_ATTEMPTS must be 1..128" >&2; exit 64
 fi
-if [[ ! "$limit" =~ ^[0-9]+$ ]] || (( 10#$limit < 5 || 10#$limit > 120 )); then
+if [[ ! "$limit" =~ ^[0-9]{1,3}$ ]] || (( 10#$limit < 5 || 10#$limit > 120 )); then
   echo "ROUTER_STRESS_TIMEOUT_SECONDS must be 5..120" >&2; exit 64
 fi
 if ! command -v timeout >/dev/null 2>&1; then
@@ -49,6 +49,19 @@ golden="$root/tests/expected.txt"
 if [[ ! -f "$entry" || -L "$entry" || ! -f "$golden" || -L "$golden" ]]; then
   echo "Missing or symlinked baseline guest/golden" >&2; exit 65
 fi
+# Bind BOTH baseline inputs to independently reviewed source Git blobs.
+# A clean Java checkout alone does not prevent a replaced Router fixture or
+# edited expected output from producing an undeserved green stress receipt.
+expected_guest_blob=7f004e9e55def28ca568b0b12c2fb7e24c3124a5
+expected_golden_blob=5ab1d42fbbf25e670dd4c0c763e17017f9d64d28
+guest_blob="$(git hash-object -- "$entry")" || exit 65
+golden_blob="$(git hash-object -- "$golden")" || exit 65
+if [[ "$guest_blob" != "$expected_guest_blob" || "$golden_blob" != "$expected_golden_blob" ]]; then
+  echo "Router guest/golden does not match independently pinned Git blobs" >&2
+  exit 65
+fi
+printf 'ROUTER_BASELINE_GUEST_BLOB=%s\nROUTER_BASELINE_GOLDEN_BLOB=%s\n' \
+  "$guest_blob" "$golden_blob"
 tmp_base=/tmp
 if [[ -v TMPDIR ]]; then tmp_base="$TMPDIR"; fi
 tmp="$(mktemp -d "$tmp_base/atto-router-stack-stress.XXXXXX")"
