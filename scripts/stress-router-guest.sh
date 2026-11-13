@@ -52,16 +52,22 @@ fi
 # Bind BOTH baseline inputs to independently reviewed source Git blobs.
 # A clean Java checkout alone does not prevent a replaced Router fixture or
 # edited expected output from producing an undeserved green stress receipt.
+expected_router_blob=4e1760c26f904728550f1defbe44cf96a93cd3de
 expected_guest_blob=7f004e9e55def28ca568b0b12c2fb7e24c3124a5
 expected_golden_blob=5ab1d42fbbf25e670dd4c0c763e17017f9d64d28
+router_source="$root/src/http_routing.atto"
+if [[ ! -f "$router_source" || -L "$router_source" ]]; then
+  echo "Missing or symlinked Router source" >&2; exit 65
+fi
+router_blob="$(git hash-object -- "$router_source")" || exit 65
 guest_blob="$(git hash-object -- "$entry")" || exit 65
 golden_blob="$(git hash-object -- "$golden")" || exit 65
-if [[ "$guest_blob" != "$expected_guest_blob" || "$golden_blob" != "$expected_golden_blob" ]]; then
-  echo "Router guest/golden does not match independently pinned Git blobs" >&2
+if [[ "$router_blob" != "$expected_router_blob" || "$guest_blob" != "$expected_guest_blob" || "$golden_blob" != "$expected_golden_blob" ]]; then
+  echo "Router source/guest/golden does not match independently pinned Git blobs" >&2
   exit 65
 fi
-printf 'ROUTER_BASELINE_GUEST_BLOB=%s\nROUTER_BASELINE_GOLDEN_BLOB=%s\n' \
-  "$guest_blob" "$golden_blob"
+printf 'ROUTER_SOURCE_BLOB=%s\nROUTER_BASELINE_GUEST_BLOB=%s\nROUTER_BASELINE_GOLDEN_BLOB=%s\n' \
+  "$router_blob" "$guest_blob" "$golden_blob"
 tmp_base=/tmp
 if [[ -v TMPDIR ]]; then tmp_base="$TMPDIR"; fi
 tmp="$(mktemp -d "$tmp_base/atto-router-stack-stress.XXXXXX")"
