@@ -18,9 +18,18 @@ ROUTER_STRESS_ATTEMPTS=32 ROUTER_STRESS_TIMEOUT_SECONDS=30 \
 
 The harness runs the original 101-case `tests/router_semantics.atto`
 in a fresh compiler/JVM process on **every** iteration. It requires a pinned
-clean Java source checkout, compares exact committed stdout, and fails on any
+clean Java source checkout, pins the Router guest and golden to reviewed Git
+blob SHAs (`7f004e9e55def28ca568b0b12c2fb7e24c3124a5` and
+`5ab1d42fbbf25e670dd4c0c763e17017f9d64d28`), compares exact
+committed stdout, and fails on any
 nonzero exit, timeout, golden mismatch, or `StackOverflowError` in stderr.
 Attempts are bounded 1..128; per-process deadline is bounded 5..120 seconds.
+Numeric configuration is limited to three decimal digits before arithmetic,
+preventing oversized decimal values from wrapping in shell arithmetic.
+The two Router inputs must be intentionally re-pinned and reviewed if their
+contents change; a clean compiler tree alone does not authenticate the
+application baseline. A passing shell stress run is not a complete Git tree,
+actor isolation, or runtime proof.
 It NEVER retries a failing iteration into green; it reports the failing
 iteration, status and stderr tail.
 
