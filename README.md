@@ -25,3 +25,15 @@ This README describes the project's intended role. It does not imply that the li
 - [AttoLang](https://github.com/atto-lang)
 - [Language specification](https://github.com/atto-lang/atto-spec)
 - [Platform conformance](https://github.com/atto-lang/atto-platform-conformance)
+
+## Repository ownership and contribution routing
+
+**Belongs here:** Reusable HTTP route matching/precedence, path decoding, method mismatch, handler integration and immutable route snapshots.
+
+**Belongs elsewhere:** Full servers in atto-api-server.atto or atto-demo-restful-server; front/reverse proxy demos in their separate example repos; cloud ingress in atto-co.
+
+**Security and portability boundary:** Reject ambiguous captures, traversal, malformed percent encodings and conflicting routes; protect borrow-only request views through asynchronous handler lifetimes.
+
+AttoLang is the public name; preserve existing Oreslang/.ores compatibility and use canonical .atto for new portable library source. This README defines scope, not feature readiness.
+
+**Acceptance:** name exact source SHA/tree, runtime/toolchain, positive and negative checks and execution receipt before claiming support. Host-only tests and empty CI steps do not prove guest execution.
