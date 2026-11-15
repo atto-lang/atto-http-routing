@@ -37,3 +37,9 @@ This README describes the project's intended role. It does not imply that the li
 AttoLang is the public name; preserve existing Oreslang/.ores compatibility and use canonical .atto for new portable library source. This README defines scope, not feature readiness.
 
 **Acceptance:** name exact source SHA/tree, runtime/toolchain, positive and negative checks and execution receipt before claiming support. Host-only tests and empty CI steps do not prove guest execution.
+
+## Bounded route matching reference (host-only)
+
+`reference/route_matcher.py` implements a deliberately small route contract: exact static segments and named `:snake_case` parameters, strict slash handling, a maximum of 64 segments/4096 path characters, duplicate parameter rejection and fail-closed invalid request paths. It **does not** percent-decode, parse the HTTP method/query/headers, normalize Unicode, authenticate requests, or execute handlers. Callers must validate decoded URLs at the trust boundary and choose explicit decoding policy before a production adapter.
+
+Run `python3 -m unittest discover -s tests -v`. The reference is host-only; no Atto compiler or HTTP server guest implementation is claimed.
