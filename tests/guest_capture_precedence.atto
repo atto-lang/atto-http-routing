@@ -19,7 +19,7 @@ pub routine main() -> void {
 
   val id_match = router.resolve("GET", http_routing.request_path(arr["capture", "alpha"]));
   stdio.println(id_match.handler_id == 21);
-  stdio.println(router.capture_one(rt borrow id_match, "id").unwrap() == "alpha");
+  stdio.println(router.capture_one(rt borrow id_match, "id").unwrap() eq "alpha");
   val empty_match = router.resolve("GET", http_routing.request_path(arr["capture", ""]));
   stdio.println(empty_match.handler_id == 22);
   stdio.println(router.capture_one(rt borrow empty_match, "id").is_none());
