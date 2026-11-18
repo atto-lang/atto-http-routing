@@ -71,7 +71,7 @@ pub routine main() -> void {
   // segments, NOT a percent-decoder or raw HTTP parser.
   stdio.println(http_routing.request_path_checked(arr["users", ".."]).is_err());
   stdio.println(http_routing.request_path_checked(arr["users", "."]).is_err());
-  val mut segments = new Array<String>();
+  let mut Array<String> segments = new Array<String>();
   for (let int index = 0; index < 129; index = index + 1) {
     segments.add("x");
   }
