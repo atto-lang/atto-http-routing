@@ -22,7 +22,10 @@ fn check_language_policy(dir: &Path) {
         let item = item.expect("read entry");
         let path = item.path();
         let name = item.file_name();
-        if path.is_dir() {
+        let metadata = fs::symlink_metadata(&path).expect("inspect entry metadata");
+        assert!(!metadata.file_type().is_symlink(),
+            "symlinks are prohibited in the source/test tree: {}", path.display());
+        if metadata.is_dir() {
             assert_ne!(name.as_os_str(), OsStr::new("__pycache__"),
                 "Python cache directory forbidden: {}", path.display());
             if name.as_os_str() != OsStr::new(".git")
@@ -31,9 +34,23 @@ fn check_language_policy(dir: &Path) {
                 check_language_policy(&path);
             }
         } else {
-            let ext = path.extension().and_then(OsStr::to_str).unwrap_or("");
-            assert!(!matches!(ext, "py" | "pyc" | "pyo" | "pyd"),
-                "Python file forbidden: {}", path.display());
+            assert!(metadata.is_file(), "nonregular file forbidden: {}", path.display());
+            let file_name = name.to_string_lossy().to_ascii_lowercase();
+            let ext = path.extension().and_then(OsStr::to_str)
+                .unwrap_or("").to_ascii_lowercase();
+            assert!(!matches!(ext.as_str(), "py" | "pyc" | "pyo" | "pyd")
+                && !matches!(file_name.as_str(),
+                    "requirements.txt" | "pyproject.toml" | "pipfile" | "pipfile.lock"
+                    | "poetry.lock" | ".python-version"),
+                "Python file/dependency forbidden: {}", path.display());
+            if matches!(ext.as_str(), "yml" | "yaml" | "sh" | "bash") {
+                let content = fs::read_to_string(&path).expect("read workflow/script");
+                let normalized = content.to_ascii_lowercase();
+                for forbidden in ["python3 ", "python ", "pytest", "pip install"] {
+                    assert!(!normalized.contains(forbidden),
+                        "Python execution in workflow/script forbidden: {}", path.display());
+                }
+            }
         }
     }
 }
@@ -41,6 +58,38 @@ fn check_language_policy(dir: &Path) {
 #[test]
 fn rejects_python_source_and_tests() {
     check_language_policy(&root());
+}
+
+#[test]
+fn string_keys_use_atto_value_equality_not_identity() {
+    let source = fs::read_to_string(root().join("src/http_routing.atto"))
+        .expect("missing native Atto routing source");
+    for required in [
+        "previous.value eq segment.value",
+        "self.static_names.get(index) eq literal_value",
+        "self.static_literals.get(edge_index) eq segment",
+        "self.targets_value.get(index).method eq method_value",
+        "endpoint.target_at(index).method eq method_value",
+        "method_value eq \"HEAD\"",
+        "method_value eq \"OPTIONS\"",
+        "current.param_name neq segment.value",
+        "actual neq segment.value",
+        "segment.value eq name",
+        "decision.route_template neq endpoint.template()",
+        "target.operation_id neq decision.operation_id",
+    ] {
+        assert!(source.contains(required), "missing Atto string value comparison: {required}");
+    }
+    for prohibited in [
+        ".value == ", ".value != ", ".method == ", ".method != ",
+        ".param_name == ", ".param_name != ", ".wildcard_name == ",
+        ".wildcard_name != ", "method_value == ", "method_value != ",
+        "actual == ", "actual != ", "segment == \".\"",
+        "segment == \"..\"",
+    ] {
+        assert!(!source.contains(prohibited),
+            "string identity operator used where value equality is required: {prohibited}");
+    }
 }
 
 #[test]
