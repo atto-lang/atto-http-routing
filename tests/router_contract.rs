@@ -116,19 +116,33 @@ fn route_registration_and_method_resolution_fail_closed_in_atto_source() {
         "if !self.canonical_method(method_value); then",
         "return new Decision(5, -1, -1, -1, -1, -1",
         "if segments.size > 128; then",
+        "if max_segments > 128; then",
+        "if max_match_steps > 16384; then",
     ] {
         assert!(source.contains(required),
             "missing production .atto admission guard: {required}");
     }
     assert_eq!(source.matches("canonical_method(String method_value) -> bool").count(), 2,
         "registration-time and request-time method validation must both be present");
+    let size_check = source.find("if pattern.size() > self.max_segments_value; then")
+        .expect("missing cheap pattern length preflight");
+    let validity_check = source.find("if !pattern.is_valid(); then")
+        .expect("missing route structural validation");
+    assert!(size_check < validity_check,
+        "large patterns must be rejected before duplicate-name quadratic scanning");
+    assert!(source.contains(
+        "return new Decision(5, -1, -1, -1, -1, -1, \"\", \"\", false, new RequestPath(new Array<String>()));"),
+        "reject invalid methods without copying untrusted request path");
+
     let fixture = fs::read_to_string(root().join("tests/guest_route_name_validation.atto"))
         .expect("missing actual Atto guest negative fixture");
     for case in ["param(\"Bad\")", "param(\"9id\")", "param(\"_id\")",
         "param(\"user-id\")", "param(\"café\")", "wildcard(\"Bad\")",
         "is_invalid_method()", "builder.build().route_count() == 1",
         "request_path_checked(segments).is_err()",
-        "request_path_checked(arr[\"users\", \"..\"]).is_err()"] {
+        "request_path_checked(arr[\"users\", \"..\"]).is_err()",
+        "set_limits(129, 4096).is_err()",
+        "set_limits(128, 16385).is_err()"] {
         assert!(fixture.contains(case), "guest fixture lacks case: {case}");
     }
 }
