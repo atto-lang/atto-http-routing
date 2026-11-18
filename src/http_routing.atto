@@ -1033,6 +1033,11 @@ define module http_routing as
   // Only for already decoded segments. Reject traversal tokens without
   // collapsing trailing empties, re-splitting decoded slashes or double decoding.
   pub fnc request_path_checked(Array<String> segments) -> Result<RequestPath, String> {
+    // Bound the decoded path before allocating the defensive copy.
+    // RouterBuilder.set_limits() may choose stricter bounds independently.
+    if segments.size > 128; then
+      return Err("decoded path exceeds maximum segment count");
+    fi
     for (const segment of segments) {
       if segment eq "." || segment eq ".."; then
         return Err("decoded dot segment rejected");
