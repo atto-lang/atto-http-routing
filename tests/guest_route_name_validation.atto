@@ -66,5 +66,15 @@ pub routine main() -> void {
   stdio.println(router.resolve(
     "GET", http_routing.request_path(arr["users", "123"])
   ).handler_id == 101);
+
+  // The checked constructor is a defensive boundary for already-decoded
+  // segments, NOT a percent-decoder or raw HTTP parser.
+  stdio.println(http_routing.request_path_checked(arr["users", ".."]).is_err());
+  stdio.println(http_routing.request_path_checked(arr["users", "."]).is_err());
+  val mut segments = new Array<String>();
+  for (let int index = 0; index < 129; index = index + 1) {
+    segments.add("x");
+  }
+  stdio.println(http_routing.request_path_checked(segments).is_err());
   return;
 }
