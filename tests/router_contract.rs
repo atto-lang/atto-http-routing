@@ -115,6 +115,7 @@ fn route_registration_and_method_resolution_fail_closed_in_atto_source() {
         "pub is_invalid_method() -> bool",
         "if !self.canonical_method(method_value); then",
         "return new Decision(5, -1, -1, -1, -1, -1",
+        "if segments.size > 128; then",
     ] {
         assert!(source.contains(required),
             "missing production .atto admission guard: {required}");
@@ -125,7 +126,9 @@ fn route_registration_and_method_resolution_fail_closed_in_atto_source() {
         .expect("missing actual Atto guest negative fixture");
     for case in ["param(\"Bad\")", "param(\"9id\")", "param(\"_id\")",
         "param(\"user-id\")", "param(\"café\")", "wildcard(\"Bad\")",
-        "is_invalid_method()", "builder.build().route_count() == 1"] {
+        "is_invalid_method()", "builder.build().route_count() == 1",
+        "request_path_checked(segments).is_err()",
+        "request_path_checked(arr[\"users\", \"..\"]).is_err()"] {
         assert!(fixture.contains(case), "guest fixture lacks case: {case}");
     }
 }
