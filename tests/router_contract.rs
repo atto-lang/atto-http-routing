@@ -11,6 +11,7 @@ const GUESTS: &[&str] = &[
     "guest_method_tokens",
     "guest_snapshot_isolation",
     "guest_capture_precedence",
+    "guest_route_name_validation",
 ];
 
 fn root() -> PathBuf {
@@ -99,6 +100,33 @@ fn native_router_is_atto_not_a_host_reference() {
     assert!(source.contains("define module http_routing as"));
     for contract in ["request_path_checked", "pub fnc builder()", "capture_one", "is_method_not_allowed"] {
         assert!(source.contains(contract), "missing native contract: {contract}");
+    }
+}
+
+#[test]
+fn route_registration_and_method_resolution_fail_closed_in_atto_source() {
+    let source = fs::read_to_string(root().join("src/http_routing.atto"))
+        .expect("missing native Atto router");
+    for required in [
+        "segment.value.starts_with(first)",
+        "remaining = remaining.replace_literal(allowed, \"\")",
+        "if !starts_lowercase; then",
+        "if remaining neq \"\"; then",
+        "pub is_invalid_method() -> bool",
+        "if !self.canonical_method(method_value); then",
+        "return new Decision(5, -1, -1, -1, -1, -1",
+    ] {
+        assert!(source.contains(required),
+            "missing production .atto admission guard: {required}");
+    }
+    assert_eq!(source.matches("canonical_method(String method_value) -> bool").count(), 2,
+        "registration-time and request-time method validation must both be present");
+    let fixture = fs::read_to_string(root().join("tests/guest_route_name_validation.atto"))
+        .expect("missing actual Atto guest negative fixture");
+    for case in ["param(\"Bad\")", "param(\"9id\")", "param(\"_id\")",
+        "param(\"user-id\")", "param(\"café\")", "wildcard(\"Bad\")",
+        "is_invalid_method()", "builder.build().route_count() == 1"] {
+        assert!(fixture.contains(case), "guest fixture lacks case: {case}");
     }
 }
 
