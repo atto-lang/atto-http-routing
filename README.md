@@ -63,7 +63,10 @@ exact stdout goldens. There is no Python runtime implementation or test harness.
 
 ```sh
 cargo test --test router_contract
-ATTO_COMPILER=/path/to/compatible/atto-compiler cargo test --test router_contract -- --ignored
+ATTO_COMPILER=/path/to/compatible/atto-compiler \
+ATTO_COMPILER_SOURCE_DIR=/path/to/clean/compiler-checkout \
+ATTO_COMPILER_SHA=<exact-40-character-commit-sha> \
+cargo test --test router_contract run_native_atto_guest_suite -- --ignored --exact --nocapture
 ```
 
 The first command checks repository language policy (including symlinks, Python
@@ -77,7 +80,11 @@ HTTP-method/capture-name tokens. The adapter checks are **test-only**:
 they do not make the Atto router safe to call with unvalidated raw URLs.
 The adapter deliberately rejects encoded slashes and nested percent escapes.
 **Passing Rust tests is not guest execution.** The ignored integration test runs a compatible Atto
-compiler against guest fixtures (check then execute, exact golden stdout). Its
+compiler against five guest fixtures (check then execute, exact golden stdout),
+but first requires a clean compiler source checkout at the exact pinned Git
+commit. A pinned checkout is necessary for provenance, but alone does not
+independently prove binary provenance; the chosen binary/build receipt must
+also be audited. Its
 `--platform=server` convention is inherited from the original Oreslang runner
 and must be verified against the selected Atto backend. No current-backend or
 multi-backend execution is claimed until actual CI receipts are produced.
