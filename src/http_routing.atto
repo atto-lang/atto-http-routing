@@ -51,6 +51,36 @@ define module http_routing as
             return false;
           fi
 
+          // Capture names are registration metadata, not URL contents.
+          // Reject invalid names before any mutable trie construction. Keep
+          // ASCII snake_case to avoid ambiguous keys between adapters.
+          // This is a character-set gate; the full 64-byte bound awaits a
+          // portable String byte-length contract on every Atto backend.
+          let bool starts_lowercase = false;
+          for (const first of arr[
+            "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
+            "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"
+          ]) {
+            if segment.value.starts_with(first); then
+              starts_lowercase = true;
+            fi
+          }
+          if !starts_lowercase; then
+            return false;
+          fi
+
+          let String remaining = segment.value;
+          for (const allowed of arr[
+            "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
+            "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
+            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "_"
+          ]) {
+            remaining = remaining.replace_literal(allowed, "");
+          }
+          if remaining neq ""; then
+            return false;
+          fi
+
           for (let int earlier = 0; earlier < index; earlier = earlier + 1) {
             val PathSegment previous = self.segments_value.get(earlier);
             if (previous.kind == 1 || previous.kind == 2) && previous.value eq segment.value; then
