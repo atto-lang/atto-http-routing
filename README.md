@@ -38,8 +38,35 @@ AttoLang is the public name; preserve existing Oreslang/.ores compatibility and 
 
 **Acceptance:** name exact source SHA/tree, runtime/toolchain, positive and negative checks and execution receipt before claiming support. Host-only tests and empty CI steps do not prove guest execution.
 
-## Bounded route matching reference (host-only)
+## Native Atto router proposal (PR #2)
 
-`reference/route_matcher.py` implements a deliberately small route contract: exact static segments and named `:snake_case` parameters, strict slash handling, a maximum of 64 segments/4096 path characters, duplicate parameter rejection and fail-closed invalid request paths. It **does not** percent-decode, parse the HTTP method/query/headers, normalize Unicode, authenticate requests, or execute handlers. Callers must validate decoded URLs at the trust boundary and choose explicit decoding policy before a production adapter.
+This branch contains a **targeted source port**, not an ownership transfer.
+`src/http_routing.atto` is byte-identical to the source in
+`ores-truffle-oreslang/oreslang-http-routing` at main commit
+`a8e994dc6fc24fec48509679d01491c1f4210c60`
+(source blob `4e1760c26f904728550f1defbe44cf96a93cd3de`).
+The original repository, history, and migration approvals remain unchanged.
 
-Run `python3 -m unittest discover -s tests -v`. The reference is host-only; no Atto compiler or HTTP server guest implementation is claimed.
+The Atto router accepts **already split, already decoded path segments**, not raw
+request URLs. The HTTP adapter must parse/validate the method and request-target,
+split before decoding, percent-decode each segment exactly once, reject malformed
+encodings and traversal, and preserve repeated/trailing separators. The native
+router supports precedence with bounded backtracking, wildcard/parameter
+captures, HEAD/OPTIONS handling, HTTP method outcomes, and detached snapshots.
+It is not an HTTP server.
+
+All supporting tests here are in Rust, with native `.atto` guest fixtures and
+exact stdout goldens. There is no Python runtime implementation or test harness.
+
+```sh
+cargo test --test router_contract
+ATTO_COMPILER=/path/to/compatible/atto-compiler cargo test --test router_contract -- --ignored
+```
+
+The first command checks repository language policy and fixture integrity,
+**not** guest execution. The ignored integration test runs a compatible Atto
+compiler against guest fixtures (check then execute, exact golden stdout). Its
+`--platform=server` convention is inherited from the original Oreslang runner
+and must be verified against the selected Atto backend. No current-backend or
+multi-backend execution is claimed until actual CI receipts are produced.
+Keep this PR draft until runtime and API compatibility are independently checked.
