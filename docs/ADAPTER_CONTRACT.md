@@ -24,7 +24,9 @@ authentication or authorization capability.
 
 - Route registration checks HTTP method token characters, nonnegative handler
   identifiers, maximum segments, duplicate capture names, wildcard position,
-  conflicting route shapes, and malformed capture names.
+  conflicting route shapes, and malformed capture names. It rejects oversized
+  patterns **before** duplicate-name scanning to prevent avoidable quadratic
+  work. Configurable limits cannot exceed 128 segments or 16,384 match steps.
 - Capture name character contract: ASCII lowercase initial letter, followed
   by lowercase ASCII letters, digits, or underscores. This excludes uppercase,
   leading underscore/digit, hyphen, Unicode, or embedded control bytes.
@@ -33,6 +35,8 @@ authentication or authorization capability.
   not a claimed pass. The Rust test-only model caps names at 64 bytes.
 - A `Router.resolve` rejects an invalid HTTP method with decision kind 5
   (`is_invalid_method()`) before trie lookup, including on catch-all routes.
+  Invalid-method and limit-exceeded decisions do not retain/copy the rejected
+  path; ingress logging must use the adapter's validated bounded representation.
 - A `request_path_checked` rejects exact already-decoded `.` and `..`
   segments and rejects more than 128 segments before copying. It does **not**
   validate raw percent escapes, raw total bytes, or decoded segment byte lengths.
