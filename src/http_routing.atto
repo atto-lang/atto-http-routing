@@ -196,6 +196,7 @@ define module http_routing as
   // 2 = method not allowed
   // 3 = automatic OPTIONS
   // 4 = routing limit exceeded
+  // 5 = invalid HTTP method token (fail closed, not a route miss)
   define class Decision as
     pub val int kind;
     pub val int endpoint_index;
@@ -226,6 +227,10 @@ define module http_routing as
 
     pub is_limit_exceeded() -> bool {
       return self.kind == 4;
+    }
+
+    pub is_invalid_method() -> bool {
+      return self.kind == 5;
     }
 
     pub path() -> RequestPath {
@@ -631,6 +636,23 @@ define module http_routing as
     val int max_segments_value;
     val int max_match_steps_value;
 
+    // Request-time gate mirrors registration-time HTTP token validation.
+    // A wildcard route must NEVER dispatch an invalid method token.
+    canonical_method(String method_value) -> bool {
+      if method_value eq ""; then return false; fi
+      let String remaining = method_value;
+      for (const allowed of arr[
+        "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+        "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+        "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+        "!", "#", "$", "%", "&", "'", "*", "+", "-", ".", "^", "_",
+        "`", "|", "~"
+      ]) {
+        remaining = remaining.replace_literal(allowed, "");
+      }
+      return remaining eq "";
+    }
+
     static_child(int node_index, String segment) -> int {
       val int start = self.node_static_start.get(node_index);
       val int count = self.node_static_count.get(node_index);
@@ -749,6 +771,13 @@ define module http_routing as
     pub resolve(String method_value, RequestPath request_path_value) -> Decision {
       if request_path_value.size() > self.max_segments_value; then
         return new Decision(4, -1, -1, -1, -1, -1, "", "", false, request_path_value.copy());
+      fi
+
+      // Reject malformed method bytes before attempting any trie lookup.
+      // In particular, registered any("*") routes must never accept CR/LF,
+      // lowercase or non-token request methods.
+      if !self.canonical_method(method_value); then
+        return new Decision(5, -1, -1, -1, -1, -1, "", "", false, request_path_value.copy());
       fi
 
       let mut SearchBudget budget = new SearchBudget(self.max_match_steps_value);
