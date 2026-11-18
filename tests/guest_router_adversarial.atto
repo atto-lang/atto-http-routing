@@ -58,8 +58,8 @@ pub routine main() -> void {
   val backtrack_a = older.resolve("GET", http_routing.request_path(arr["a", "fixed", "edit"]));
   val backtrack_b = other_order.resolve("GET", http_routing.request_path(arr["a", "fixed", "edit"]));
   expect(backtrack_a.handler_id == 105 && backtrack_b.handler_id == 105);
-  expect(older.capture_one(rt borrow backtrack_a, "id").unwrap() == "fixed");
-  expect(other_order.capture_one(rt borrow backtrack_b, "id").unwrap() == "fixed");
+  expect(older.capture_one(rt borrow backtrack_a, "id").unwrap() eq "fixed");
+  expect(other_order.capture_one(rt borrow backtrack_b, "id").unwrap() eq "fixed");
   val empty_tail = older.resolve("GET", http_routing.request_path(arr["a"]));
   expect(empty_tail.handler_id == 103);
   expect(older.capture(rt borrow empty_tail, "tail").unwrap().size() == 0);
@@ -108,7 +108,7 @@ pub routine main() -> void {
   expect(older.capture(rt borrow trailing, "tail").unwrap().size() == 2);
   val repeated = older.resolve("GET", http_routing.request_path(arr["a", "", "x"]));
   expect(repeated.handler_id == 103);
-  expect(older.capture(rt borrow repeated, "tail").unwrap().at(0).unwrap() == "");
+  expect(older.capture(rt borrow repeated, "tail").unwrap().at(0).unwrap() eq "");
 
   // R05: rejected registrations never change the already built snapshot.
   expect(forward.get(rt borrow fixed, 999).is_err());
@@ -147,7 +147,7 @@ pub routine main() -> void {
   // R06: detach snapshot from later route/policy changes; retain captures.
   // Decision owns a request-path copy and remains usable across rebuilds.
   val old_decision = older.resolve("GET", http_routing.request_path(arr["a", "original"]));
-  expect(older.capture_one(rt borrow old_decision, "id").unwrap() == "original");
+  expect(older.capture_one(rt borrow old_decision, "id").unwrap() eq "original");
 
   val later = http_routing.path("/later", arr[http_routing.literal("later")]);
   expect(forward.get(rt borrow later, 120).is_ok());
@@ -161,7 +161,7 @@ pub routine main() -> void {
   expect(newer.resolve("HEAD", http_routing.request_path(arr["a", "fixed"])).is_method_not_allowed());
   expect(older.resolve("OPTIONS", http_routing.request_path(arr["a", "fixed"])).is_automatic_options());
   expect(newer.resolve("OPTIONS", http_routing.request_path(arr["a", "fixed"])).is_method_not_allowed());
-  expect(older.capture_one(rt borrow old_decision, "id").unwrap() == "original");
+  expect(older.capture_one(rt borrow old_decision, "id").unwrap() eq "original");
 
   // R07: already-decoded adapter boundary; NEVER split or decode twice.
   // Raw %2F -> segment "/", raw %252F -> segment "%2F".
@@ -185,16 +185,16 @@ pub routine main() -> void {
   expect(escaped_router.resolve("GET", http_routing.request_path(arr["esc", "%2F"])).handler_id == 302);
   val encoded_twice = escaped_router.resolve("GET", http_routing.request_path(arr["esc", "%252F"]));
   expect(encoded_twice.handler_id == 303);
-  expect(escaped_router.capture_one(rt borrow encoded_twice, "value").unwrap() == "%252F");
+  expect(escaped_router.capture_one(rt borrow encoded_twice, "value").unwrap() eq "%252F");
   val percent_literal = escaped_router.resolve("GET", http_routing.request_path(arr["esc", "%GG"]));
   expect(percent_literal.handler_id == 303);
-  expect(escaped_router.capture_one(rt borrow percent_literal, "value").unwrap() == "%GG");
+  expect(escaped_router.capture_one(rt borrow percent_literal, "value").unwrap() eq "%GG");
 
   // R08: unchecked request_path seam witness; request_path_checked rejects dot segments.\n  // The legacy request_path constructor still accepts ".." as
   // opaque decoded data; the adapter/application must validate request targets.
   val traversal_witness = escaped_router.resolve("GET", http_routing.request_path(arr["esc", ".."]));
   expect(traversal_witness.handler_id == 303);
-  expect(escaped_router.capture_one(rt borrow traversal_witness, "value").unwrap() == "..");
+  expect(escaped_router.capture_one(rt borrow traversal_witness, "value").unwrap() eq "..");
 
   // R09: PR #25 reconciliation. A Decision is not a transferable capability:
   // an identical endpoint slot/template from a foreign router cannot read
@@ -222,7 +222,7 @@ pub routine main() -> void {
 
   // A legitimate decision from the producing immutable router still works.
   val legitimate = older.resolve("GET", http_routing.request_path(arr["a", "visitor"]));
-  expect(older.capture_one(rt borrow legitimate, "id").unwrap() == "visitor");
+  expect(older.capture_one(rt borrow legitimate, "id").unwrap() eq "visitor");
 
   // R10: reconcile PR #27. Empty decoded path segments must not be treated
   // as named resource IDs. Literal-empty and wildcard edges remain valid.
