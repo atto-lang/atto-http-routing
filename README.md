@@ -40,11 +40,14 @@ AttoLang is the public name; preserve existing Oreslang/.ores compatibility and 
 
 ## Native Atto router proposal (PR #2)
 
-This branch contains a **targeted source port**, not an ownership transfer.
-`src/http_routing.atto` is byte-identical to the source in
+This branch contains a **targeted Atto source port**, not an ownership transfer.
+The initial `src/http_routing.atto` was copied from
 `ores-truffle-oreslang/oreslang-http-routing` at main commit
 `a8e994dc6fc24fec48509679d01491c1f4210c60`
-(source blob `4e1760c26f904728550f1defbe44cf96a93cd3de`).
+(original source blob `4e1760c26f904728550f1defbe44cf96a93cd3de`).
+The Atto port now intentionally **differs** from that original: string key and
+method comparisons use Atto value equality (`eq`/`neq`) rather than
+reference identity (`==`/`!=`). Rust policy tests guard this distinction.
 The original repository, history, and migration approvals remain unchanged.
 
 The Atto router accepts **already split, already decoded path segments**, not raw
@@ -63,7 +66,9 @@ cargo test --test router_contract
 ATTO_COMPILER=/path/to/compatible/atto-compiler cargo test --test router_contract -- --ignored
 ```
 
-The first command checks repository language policy, fixture integrity, and
+The first command checks repository language policy (including symlinks, Python
+dependencies, and workflow commands), Atto string value-equality rules, fixture
+integrity, and
 a **Rust-only HTTP adapter admission model** in `tests/adapter_contract.rs`.
 That model checks 4,096-byte request-target limits, 128 segments, 128-byte
 segment limits, strict percent-escape decoding, NUL/control/encoded-separator
