@@ -82,3 +82,24 @@ compiler against guest fixtures (check then execute, exact golden stdout). Its
 and must be verified against the selected Atto backend. No current-backend or
 multi-backend execution is claimed until actual CI receipts are produced.
 Keep this PR draft until runtime and API compatibility are independently checked.
+
+## Atto request-boundary hardening (PR #2)
+
+The Atto source now enforces ASCII `snake_case` capture-name characters
+(first character `a`–`z`; subsequent characters `a`–`z`, `0`–`9`, or `_`),
+rejects malformed incoming method tokens **before** an `any("*")` route can
+dispatch, and caps `request_path_checked` at 128 decoded segments before copying.
+`Decision.is_invalid_method()` (kind 5) is separate from HTTP 404, 405 and
+route-budget exhaustion.
+
+**Important limitations:** portable Atto String byte-length checking has not
+yet been implemented in this module, so the production `.atto` capture-name
+gate does **not** enforce the Rust test model's 64-byte name length restriction.
+The adapter must impose total raw URL and per-segment byte limits and validate
+UTF-8 and percent decoding before calling Atto. The test-only Rust adapter model
+uses a deliberately stricter policy for encoded slash and nested `%` sequences.
+It is not production code and its passing tests cannot validate actual Atto
+request parsing or module execution.
+
+See [the adapter boundary contract](docs/ADAPTER_CONTRACT.md) for the explicit
+trusted/untrusted split and remaining compiler requirements.
