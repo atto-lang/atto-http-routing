@@ -63,8 +63,15 @@ cargo test --test router_contract
 ATTO_COMPILER=/path/to/compatible/atto-compiler cargo test --test router_contract -- --ignored
 ```
 
-The first command checks repository language policy and fixture integrity,
-**not** guest execution. The ignored integration test runs a compatible Atto
+The first command checks repository language policy, fixture integrity, and
+a **Rust-only HTTP adapter admission model** in `tests/adapter_contract.rs`.
+That model checks 4,096-byte request-target limits, 128 segments, 128-byte
+segment limits, strict percent-escape decoding, NUL/control/encoded-separator
+rejection, traversal/double-decoding defenses, preserved empty segments, and
+HTTP-method/capture-name tokens. The adapter checks are **test-only**:
+they do not make the Atto router safe to call with unvalidated raw URLs.
+The adapter deliberately rejects encoded slashes and nested percent escapes.
+**Passing Rust tests is not guest execution.** The ignored integration test runs a compatible Atto
 compiler against guest fixtures (check then execute, exact golden stdout). Its
 `--platform=server` convention is inherited from the original Oreslang runner
 and must be verified against the selected Atto backend. No current-backend or
