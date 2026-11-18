@@ -4,6 +4,9 @@ import module http_routing from "../src/http_routing";
 // request-time invalid method tokens must not reach an any("*") handler.
 pub routine main() -> void {
   val builder = http_routing.builder();
+  // Caller settings cannot override the absolute worst-case work caps.
+  stdio.println(builder.set_limits(129, 4096).is_err());
+  stdio.println(builder.set_limits(128, 16385).is_err());
   val good = http_routing.path("/users/{user_id1}", arr[
     http_routing.literal("users"), http_routing.param("user_id1")
   ]);
