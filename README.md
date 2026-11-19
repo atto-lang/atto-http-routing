@@ -90,6 +90,22 @@ and must be verified against the selected Atto backend. No current-backend or
 multi-backend execution is claimed until actual CI receipts are produced.
 Keep this PR draft until runtime and API compatibility are independently checked.
 
+## Canonical Atto borrowing at call sites
+
+Ordinary nonprimitive arguments now use implicit, ownership-checked borrowing,
+so call `builder.get(pattern, id)` instead of the old
+`builder.get(rt borrow pattern, id)`. Explicit shared loans, when
+proven necessary for disambiguation, use `borrow! pattern`, never
+`rt borrow pattern`. Mutable calls pass `mut budget` (or explicitly
+`borrow! mut budget`), never `rt mut borrow budget`. The router
+signatures use ordinary non-owning `PathPattern`, `Decision` and related
+class formals, and `mut SearchBudget` for exclusive mutable access.
+
+This is the **target AttoLang borrow-by-default** contract, not a claim that
+existing Atto compiler backends can compile the entire router. Compiler
+support for modules, collections, imports and class/method ownership modes
+remains gated, and the PR stays draft until real guest execution is shown.
+
 ## Atto request-boundary hardening (PR #2)
 
 The Atto source now enforces ASCII `snake_case` capture-name characters

@@ -62,6 +62,35 @@ fn rejects_python_source_and_tests() {
 }
 
 #[test]
+fn native_atto_calls_use_implicit_borrow_and_explicit_mutable_loans() {
+    for path in std::iter::once(root().join("src/http_routing.atto")).chain(
+        GUESTS.iter().map(|guest| root().join(format!("tests/{guest}.atto")))
+    ) {
+        let source = fs::read_to_string(&path).expect("read native Atto source");
+        for (line_number, line) in source.lines().enumerate() {
+            assert!(!line.contains("rt borrow ") && !line.contains("rt mut borrow "),
+                "legacy runtime borrow spelling in {}:{}",
+                path.display(), line_number + 1);
+        }
+    }
+    let source = fs::read_to_string(root().join("src/http_routing.atto"))
+        .expect("read native Atto router");
+    for call in [
+        "self.advance(node_index, segment)",
+        "self.match_node(0, 0, request_path_value, mut budget)",
+        "0, 0, verified_path, mut replay_budget",
+        "self.decision_path_matches(endpoint, verified_path)",
+        "self.has_method(endpoint, \"GET\")",
+    ] {
+        assert!(source.contains(call), "missing canonical borrow call: {call}");
+    }
+    assert!(source.contains("mut SearchBudget budget"),
+        "mutable budget formal must retain exclusive write authority");
+    assert!(!source.contains("borrow mut SearchBudget"),
+        "old mutable borrow formal must not recur");
+}
+
+#[test]
 fn string_keys_use_atto_value_equality_not_identity() {
     let source = fs::read_to_string(root().join("src/http_routing.atto"))
         .expect("missing native Atto routing source");

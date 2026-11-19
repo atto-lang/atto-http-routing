@@ -100,7 +100,7 @@ define module http_routing as
     // Scope/group composition stays explicit because current Oreslang does not
     // yet expose a general String concatenation/splitting standard-library
     // contract. The caller supplies the canonical combined route template.
-    pub concat(String combined_template, borrow PathPattern suffix) -> PathPattern {
+    pub concat(String combined_template, PathPattern suffix) -> PathPattern {
       let mut Array<PathSegment> combined = new Array<PathSegment>();
 
       for (const segment of self.segments_value) {
@@ -387,7 +387,7 @@ define module http_routing as
     // Returns the child node for one pattern segment, creating it when
     // absent: -1 for a conflicting parameter name, -2 for a conflicting
     // wildcard name at the same position.
-    advance(mut self)(int node_index, borrow PathSegment segment) -> int {
+    advance(mut self)(int node_index, PathSegment segment) -> int {
       let mut BuildNode current = self.nodes.get(node_index);
       if segment.kind == 0; then
         let int child_index = current.child_for_literal(segment.value);
@@ -417,7 +417,7 @@ define module http_routing as
 
     pub route(mut self)(
       String method_value,
-      borrow PathPattern pattern,
+      PathPattern pattern,
       int handler_id
     ) -> Result<bool, String> {
       return self.route(method_value, pattern, handler_id, -1, -1, "");
@@ -425,7 +425,7 @@ define module http_routing as
 
     pub route(mut self)(
       String method_value,
-      borrow PathPattern pattern,
+      PathPattern pattern,
       int handler_id,
       int pipeline_id,
       int contract_id,
@@ -498,7 +498,7 @@ define module http_routing as
 
       for (let int segment_index = 0; segment_index < pattern.size(); segment_index = segment_index + 1) {
         val PathSegment segment = pattern.segment_at(segment_index);
-        node_index = self.advance(node_index, rt borrow segment);
+        node_index = self.advance(node_index, segment);
         if node_index == -1; then
           return Err("conflicting parameter name at the same route position");
         fi
@@ -535,12 +535,12 @@ define module http_routing as
       return Ok(true);
     }
 
-    pub get(mut self)(borrow PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub get(mut self)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("GET", pattern, handler_id);
     }
 
     pub get(mut self)(
-      borrow PathPattern pattern,
+      PathPattern pattern,
       int handler_id,
       int pipeline_id,
       int contract_id,
@@ -549,12 +549,12 @@ define module http_routing as
       return self.route("GET", pattern, handler_id, pipeline_id, contract_id, operation_id);
     }
 
-    pub post(mut self)(borrow PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub post(mut self)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("POST", pattern, handler_id);
     }
 
     pub post(mut self)(
-      borrow PathPattern pattern,
+      PathPattern pattern,
       int handler_id,
       int pipeline_id,
       int contract_id,
@@ -563,27 +563,27 @@ define module http_routing as
       return self.route("POST", pattern, handler_id, pipeline_id, contract_id, operation_id);
     }
 
-    pub put(mut self)(borrow PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub put(mut self)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("PUT", pattern, handler_id);
     }
 
-    pub patch(mut self)(borrow PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub patch(mut self)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("PATCH", pattern, handler_id);
     }
 
-    pub delete(mut self)(borrow PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub delete(mut self)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("DELETE", pattern, handler_id);
     }
 
-    pub head(mut self)(borrow PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub head(mut self)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("HEAD", pattern, handler_id);
     }
 
-    pub options(mut self)(borrow PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub options(mut self)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("OPTIONS", pattern, handler_id);
     }
 
-    pub any(mut self)(borrow PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub any(mut self)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("*", pattern, handler_id);
     }
 
@@ -681,8 +681,8 @@ define module http_routing as
     match_node(
       int node_index,
       int segment_index,
-      borrow RequestPath request_path_value,
-      borrow mut SearchBudget budget
+      RequestPath request_path_value,
+      mut SearchBudget budget
     ) -> int {
       if budget.remaining <= 0; then
         return -2;
@@ -746,7 +746,7 @@ define module http_routing as
       return -1;
     }
 
-    target_for_method(borrow Endpoint endpoint, String method_value) -> int {
+    target_for_method(Endpoint endpoint, String method_value) -> int {
       for (let int index = 0; index < endpoint.target_count(); index = index + 1) {
         if endpoint.target_at(index).method eq method_value; then
           return index;
@@ -770,7 +770,7 @@ define module http_routing as
       return -1;
     }
 
-    has_method(borrow Endpoint endpoint, String method_value) -> bool {
+    has_method(Endpoint endpoint, String method_value) -> bool {
       for (let int index = 0; index < endpoint.target_count(); index = index + 1) {
         if endpoint.target_at(index).method eq method_value; then
           return true;
@@ -792,7 +792,7 @@ define module http_routing as
       fi
 
       let mut SearchBudget budget = new SearchBudget(self.max_match_steps_value);
-      val int endpoint_index = self.match_node(0, 0, rt borrow request_path_value, rt mut borrow budget);
+      val int endpoint_index = self.match_node(0, 0, request_path_value, mut budget);
 
       if endpoint_index == -2; then
         return new Decision(4, -1, -1, -1, -1, -1, "", "", false, new RequestPath(new Array<String>()));
@@ -803,7 +803,7 @@ define module http_routing as
       fi
 
       val Endpoint endpoint = self.endpoints.get(endpoint_index);
-      val int target_index = self.target_for_method(rt borrow endpoint, method_value);
+      val int target_index = self.target_for_method(endpoint, method_value);
 
       if target_index >= 0; then
         val RouteTarget target = endpoint.target_at(target_index);
@@ -857,7 +857,7 @@ define module http_routing as
     // same segment shape. Check the request snapshot against this endpoint
     // before permitting capture or Allow inspection; do not trust a foreign
     // Decision's public endpoint index or route_template as authority.
-    decision_path_matches(borrow Endpoint endpoint, borrow RequestPath path_value) -> bool {
+    decision_path_matches(Endpoint endpoint, RequestPath path_value) -> bool {
       val PathPattern pattern = endpoint.pattern();
       if path_value.size() > self.max_segments_value; then
         return false;
@@ -881,7 +881,7 @@ define module http_routing as
       return path_value.size() == pattern.size();
     }
 
-    decision_endpoint(borrow Decision decision) -> int {
+    decision_endpoint(Decision decision) -> int {
       if decision.endpoint_index < 0 || decision.endpoint_index >= self.endpoints.size; then
         return -1;
       fi
@@ -890,7 +890,7 @@ define module http_routing as
         return -1;
       fi
       val RequestPath verified_path = decision.path();
-      if !self.decision_path_matches(rt borrow endpoint, rt borrow verified_path); then
+      if !self.decision_path_matches(endpoint, verified_path); then
         return -1;
       fi
       // A plausible path shape is not enough when this table contains a
@@ -899,7 +899,7 @@ define module http_routing as
       // the same winner; a decision never selects its own endpoint.
       let mut SearchBudget replay_budget = new SearchBudget(self.max_match_steps_value);
       val int winner = self.match_node(
-        0, 0, rt borrow verified_path, rt mut borrow replay_budget
+        0, 0, verified_path, mut replay_budget
       );
       if winner != decision.endpoint_index; then
         return -1;
@@ -921,8 +921,8 @@ define module http_routing as
       return decision.endpoint_index;
     }
 
-    pub capture(borrow Decision decision, String name) -> Option<PathCapture> {
-      let int accepted_index = self.decision_endpoint(rt borrow decision);
+    pub capture(Decision decision, String name) -> Option<PathCapture> {
+      let int accepted_index = self.decision_endpoint(decision);
       if accepted_index < 0; then
         return None;
       fi
@@ -955,7 +955,7 @@ define module http_routing as
       return None;
     }
 
-    pub capture_one(borrow Decision decision, String name) -> Option<String> {
+    pub capture_one(Decision decision, String name) -> Option<String> {
       val Option<PathCapture> captured = self.capture(decision, name);
       if captured.is_none(); then
         return None;
@@ -963,8 +963,8 @@ define module http_routing as
       return captured.unwrap().one();
     }
 
-    pub allow_count(borrow Decision decision) -> int {
-      let int accepted_index = self.decision_endpoint(rt borrow decision);
+    pub allow_count(Decision decision) -> int {
+      let int accepted_index = self.decision_endpoint(decision);
       if accepted_index < 0; then
         return 0;
       fi
@@ -972,19 +972,19 @@ define module http_routing as
       val Endpoint endpoint = self.endpoints.get(accepted_index);
       let int count = endpoint.target_count();
 
-      if self.automatic_head_value && self.has_method(rt borrow endpoint, "GET") && !self.has_method(rt borrow endpoint, "HEAD"); then
+      if self.automatic_head_value && self.has_method(endpoint, "GET") && !self.has_method(endpoint, "HEAD"); then
         count = count + 1;
       fi
 
-      if self.automatic_options_value && !self.has_method(rt borrow endpoint, "OPTIONS"); then
+      if self.automatic_options_value && !self.has_method(endpoint, "OPTIONS"); then
         count = count + 1;
       fi
 
       return count;
     }
 
-    pub allow_method_at(borrow Decision decision, int requested_index) -> Option<String> {
-      let int accepted_index = self.decision_endpoint(rt borrow decision);
+    pub allow_method_at(Decision decision, int requested_index) -> Option<String> {
+      let int accepted_index = self.decision_endpoint(decision);
       if accepted_index < 0 || requested_index < 0; then
         return None;
       fi
@@ -996,14 +996,14 @@ define module http_routing as
 
       let int synthetic_index = endpoint.target_count();
 
-      if self.automatic_head_value && self.has_method(rt borrow endpoint, "GET") && !self.has_method(rt borrow endpoint, "HEAD"); then
+      if self.automatic_head_value && self.has_method(endpoint, "GET") && !self.has_method(endpoint, "HEAD"); then
         if requested_index == synthetic_index; then
           return Some("HEAD");
         fi
         synthetic_index = synthetic_index + 1;
       fi
 
-      if self.automatic_options_value && !self.has_method(rt borrow endpoint, "OPTIONS"); then
+      if self.automatic_options_value && !self.has_method(endpoint, "OPTIONS"); then
         if requested_index == synthetic_index; then
           return Some("OPTIONS");
         fi
