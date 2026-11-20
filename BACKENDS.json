@@ -1,0 +1,21 @@
+{
+  "java": {
+    "pin": "SOURCE_REF",
+    "suite": "scripts/test.sh",
+    "execution": "supported"
+  },
+  "llvm": {
+    "pin": "LLVM_SOURCE_REF",
+    "execution": "unsupported",
+    "rejection_probes": [
+      {
+        "path": "tests/router_semantics.atto",
+        "diagnostic": "oreslang-llvmc: scalar local requires an explicit ': int' or ': bool' type at byte 200 [file: router_semantics.atto]"
+      },
+      {
+        "path": "src/http_routing.atto",
+        "diagnostic": "oreslang-llvmc: expected 'rt' at byte 9639 [file: http_routing.atto]"
+      }
+    ]
+  }
+}

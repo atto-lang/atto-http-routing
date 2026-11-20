@@ -1,0 +1,4 @@
+route-precedence	java	execution
+route-rejection	java	execution
+transport-boundary	java	execution
+negative-admission	java	rejection
