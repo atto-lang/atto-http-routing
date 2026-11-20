@@ -1,0 +1,66 @@
+import class TestCase, TestSuite, TestOptions, TestOutcome, RunSummary from "ores.std/testing";
+import fnc expect_true, expect_false, expect_equal_int, expect_equal_string, run_suite, require_success, fail from "ores.std/testing";
+import module http_routing from "../src/http_routing";
+fnc rejects_zero_limits(): TestOutcome {
+  val builder = http_routing.builder();
+  return expect_true(builder.set_limits(0, 10).is_err(), "router must reject zero segment budget");
+}
+fnc rejects_duplicate_capture(): TestOutcome {
+  val builder = http_routing.builder();
+  val pattern = http_routing.path("/pair/{id}/{id}", arr[
+    http_routing.literal("pair"), http_routing.param("id"), http_routing.param("id")
+  ]);
+  return expect_true(builder.get(rt borrow pattern, 10).is_err(),
+    "duplicate path capture names must be rejected");
+}
+fnc rejects_zero_match_budget(): TestOutcome {
+  val builder = http_routing.builder();
+  return expect_true(builder.set_limits(8, 0).is_err(),
+    "router must reject zero search step budget");
+}
+fnc rejects_empty_capture_name(): TestOutcome {
+  val builder = http_routing.builder();
+  val pattern = http_routing.path("/x/{empty}", arr[
+    http_routing.literal("x"), http_routing.param("")
+  ]);
+  return expect_true(builder.get(rt borrow pattern, 4).is_err(),
+    "named captures must have nonempty identifiers");
+}
+
+fnc rejects_nonterminal_wildcard(): TestOutcome {
+  val builder = http_routing.builder();
+  val pattern = http_routing.path("/assets/*rest/tail", arr[
+    http_routing.literal("assets"), http_routing.wildcard("rest"),
+    http_routing.literal("tail")
+  ]);
+  return expect_true(builder.get(rt borrow pattern, 5).is_err(),
+    "wildcard captures must be terminal");
+}
+
+fnc rejects_negative_segment_budget(): TestOutcome {
+  val builder = http_routing.builder();
+  return expect_true(builder.set_limits(-1, 10).is_err(),
+    "negative segment budgets cannot be admitted");
+}
+
+fnc rejects_negative_match_step_budget(): TestOutcome {
+  val builder = http_routing.builder();
+  return expect_true(builder.set_limits(10, -1).is_err(),
+    "negative route-search budgets cannot be admitted");
+}
+
+pub routine main(): void {
+  val TestSuite suite = new TestSuite("http-routing", arr[
+    new TestCase("rejects_zero_limits", rejects_zero_limits, false, ""),
+    new TestCase("rejects_duplicate_capture", rejects_duplicate_capture, false, ""),
+    new TestCase("rejects_zero_match_budget", rejects_zero_match_budget, false, ""),
+    new TestCase("rejects_empty_capture_name", rejects_empty_capture_name, false, ""),
+    new TestCase("rejects_nonterminal_wildcard", rejects_nonterminal_wildcard, false, ""),
+    new TestCase("rejects_negative_segment_budget", rejects_negative_segment_budget, false, ""),
+    new TestCase("rejects_negative_match_step_budget", rejects_negative_match_step_budget, false, "")
+  ]);
+  val TestOptions options = new TestOptions("", false, true);
+  val RunSummary summary = run_suite(rt borrow suite, rt borrow options);
+  require_success(rt borrow summary);
+  return;
+}

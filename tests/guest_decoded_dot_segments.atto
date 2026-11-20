@@ -1,0 +1,20 @@
+import module http_routing from "../src/http_routing";
+
+// Exact decoded-dot guard without re-splitting decoded slashes or double decoding.
+pub routine main() -> void {
+  stdio.println(http_routing.request_path_checked(arr["."]).is_err());
+  stdio.println(http_routing.request_path_checked(arr[".."]).is_err());
+  stdio.println(http_routing.request_path_checked(arr["safe", ".", "end"]).is_err());
+  stdio.println(http_routing.request_path_checked(arr["safe", "..", "end"]).is_err());
+  stdio.println(http_routing.request_path_checked(arr["..."]).is_ok());
+  stdio.println(http_routing.request_path_checked(arr[".hidden"]).is_ok());
+  stdio.println(http_routing.request_path_checked(arr["..hidden"]).is_ok());
+  stdio.println(http_routing.request_path_checked(arr["v1.2"]).is_ok());
+  stdio.println(http_routing.request_path_checked(arr["a/.."]).is_ok());
+  stdio.println(http_routing.request_path_checked(arr["%2e"]).is_ok());
+  stdio.println(http_routing.request_path_checked(arr["%2E%2E"]).is_ok());
+  stdio.println(http_routing.request_path_checked(arr[""]).is_ok());
+  stdio.println(http_routing.request_path_checked(arr["safe", ""]).is_ok());
+  stdio.println(http_routing.request_path_checked(new Array<String>()).is_ok());
+  return;
+}
