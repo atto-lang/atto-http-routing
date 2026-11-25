@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   native-router:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -27,8 +27,7 @@ jobs:
           CANDIDATE_SHA: b02efee4c036557278284ca444655e19cd0adc64
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
-          git rev-parse HEAD^{tree}
+          bash scripts/verify_ci_checkout_head.sh
           export JAVA_HOME="${JAVA_HOME_21_X64:?JDK 21 required}"
           export PATH="$JAVA_HOME/bin:$PATH"
           java -version
