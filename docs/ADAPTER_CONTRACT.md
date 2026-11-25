@@ -1,69 +1,98 @@
-# Atto HTTP routing adapter boundary
+# HTTP adapter contract
 
-This package's production routing logic lives exclusively in `src/http_routing.atto`.
-The Rust files in `tests/` are test harnesses and a test-only protocol admission
-model; they do **not** implement the production router.
+The core router deliberately starts after raw HTTP parsing. An adapter MUST
+normalize requests consistently with route registration.
 
-## Caller/adapter responsibilities
+## Method
 
-An HTTP transport must accept a bounded raw request target, validate its syntax,
-separate query/fragment data (fragments are not sent in HTTP request targets),
-split on *raw* forward slashes, and percent-decode each segment **once**.
-It must validate UTF-8, reject NUL/control bytes, and define strict policy for
-encoded slashes, backslashes, and nested percent escapes. Do not split or decode
-again after routing; do not collapse `//` or remove trailing empty segments.
-For strict adapters, use the Rust-only `tests/adapter_contract.rs` policy as
-a supporting test reference, not as the runtime parser.
+Supply the canonical uppercase method token, for example GET, POST, HEAD, or a
+custom extension method. Matching is case-sensitive in the core.
 
-The adapter must also enforce raw URL byte length, decoded segment byte length,
-and total number of segments *before* building `Array<String>`. A returned
-`RequestPath` is decoded structured input and must not be treated as an
-authentication or authorization capability.
+Do not silently rewrite an unknown method to GET.
 
-## What the Atto router enforces
+Registration admits only uppercase ASCII HTTP `tchar` tokens (such as `GET`
+and `M-SEARCH`), plus the existing `*` route wildcard. It rejects CR/LF,
+NUL, spaces, commas, colons, lowercase and non-ASCII before changing builder
+state. Methods can flow into `Allow`; adapters must separately validate raw
+ingress methods and outgoing header values.
 
-- Route registration checks HTTP method token characters, nonnegative handler
-  identifiers, maximum segments, duplicate capture names, wildcard position,
-  conflicting route shapes, and malformed capture names. It rejects oversized
-  patterns **before** duplicate-name scanning to prevent avoidable quadratic
-  work. Configurable limits cannot exceed 128 segments or 16,384 match steps.
-- Capture name character contract: ASCII lowercase initial letter, followed
-  by lowercase ASCII letters, digits, or underscores. This excludes uppercase,
-  leading underscore/digit, hyphen, Unicode, or embedded control bytes.
-- Capture names currently **lack a portable byte-length bound** in the Atto
-  implementation. This remains a compiler/runtime and registration API gap,
-  not a claimed pass. The Rust test-only model caps names at 64 bytes.
-- A `Router.resolve` rejects an invalid HTTP method with decision kind 5
-  (`is_invalid_method()`) before trie lookup, including on catch-all routes.
-  Invalid-method and limit-exceeded decisions do not retain/copy the rejected
-  path; ingress logging must use the adapter's validated bounded representation.
-- A `request_path_checked` rejects exact already-decoded `.` and `..`
-  segments and rejects more than 128 segments before copying. It does **not**
-  validate raw percent escapes, raw total bytes, or decoded segment byte lengths.
-- The unchecked `request_path` is retained for compatibility; untrusted
-  transport inputs must not reach it without adapter validation.
-- Resolution is path-first; static > named parameter > terminal wildcard.
-  A found path with a mismatched method yields a method-not-allowed decision.
-  Search-budget exhaustion remains distinct from a 404.
+## Path segmentation
 
-## Response mapping and lifetimes
+Split the request-target path on '/' before percent-decoding segment contents.
 
-A typical adapter maps matched decisions to handler dispatch, not-found to
-404, method-not-allowed to 405, invalid-method to 400, and budget exhaustion
-to a bounded 400/414 policy. Generate `Allow` only for validated
-method-not-allowed or automatic OPTIONS decisions.
+Then decode each segment exactly once.
 
-`Decision`, `Router`, and `PathCapture` are not authorization tokens and
-must not cross isolated actor boundaries. Extract validated immutable values
-and pass only permitted scalar data into the actor capability. Authorize the
-requested resource separately from matching its route.
+Do not:
 
-## Verification
+- decode '%2F' into '/' and then split again;
+- treat a query string or fragment as part of the path;
+- collapse repeated slashes unless the application has explicitly chosen a
+  redirect/canonicalization policy;
+- drop a trailing empty segment.
 
-`cargo test --all-targets -- --nocapture` executes Rust-only source/fixture
-policy and adapter-model tests. The separate ignored native Atto integration
-test requires a **compatible pinned compiler**, explicit source checkout, and
-actual guest execution against `.expected` outputs. The compiler/runtime
-currently lacks portions of the required collection/string/import support,
-tracked in `atto-source.rs#348`. Do not claim production Atto execution,
-native AOT readiness, actor-lifetime safety, or backend parity from host tests.
+Canonical examples:
+
+- '/' -> []
+- '/users' -> ['users']
+- '/users/' -> ['users', '']
+- '/a//b' -> ['a', '', 'b']
+
+The router itself receives only the Array<String> of path segments. Named parameters never
+capture empty decoded segments; use an explicit `literal("")` or terminal
+wildcard for intentional empty segments.
+
+## Validation before routing
+
+A production adapter should reject malformed percent escapes, NUL/control
+characters, and invalid request-target encodings before constructing
+RequestPath. Backslash handling should be explicit rather than platform
+dependent.
+
+The router's max_segments and max_match_steps limits are a second defensive
+boundary, not a substitute for protocol parsing limits.
+
+## Responses
+
+Decision is intentionally transport-neutral. A typical adapter maps it as:
+
+- is_match -> invoke handler_id through pipeline_id
+- is_not_found -> 404
+- is_method_not_allowed -> 405 and emit Allow from allow_method_at()
+- is_automatic_options -> adapter-generated OPTIONS response and Allow
+- is_limit_exceeded -> defensive 400/414 policy chosen by the server
+
+For HEAD, suppress_body is true whether the match came from an explicit HEAD
+route or GET fallback. The handler may still compute headers/status exactly as
+for the corresponding request; the transport must suppress body emission.
+
+## Body, headers, query, and typed extraction
+
+Those values intentionally do not participate in path matching.
+
+Typed extractors should run after routing using contract_id and application
+metadata. This mirrors the useful separation in extractor-based routers:
+matching selects the endpoint; validation/extraction turns protocol data into
+typed application inputs.
+
+## Actor adapters
+
+Registration borrows patterns (`routes.get(&pattern, handler_id)`), while the
+builder copies pattern data into its own storage. Inspection helpers borrow
+matching decisions (`router.capture_one(&decision, "id")`). A decision owns a
+detached request-path snapshot, and a capture is a view over that snapshot.
+
+A dispatcher must not send a Decision, PathCapture, or Router object to an
+isolated actor. Extract immutable scalar strings and place them in the actor's
+request capability before transferring it. Keep handler objects in the host
+adapter's registry; routing metadata contains only scalar IDs and operation names.
+
+## Optional checked decoded-segment constructor
+
+`http_routing.request_path_checked(segments)` is an additive guard for
+already split, already decoded segments. It rejects exact decoded `.` or `..`
+segments while preserving trailing empties, decoded slashes within their
+original segment, and percent-literal content without double decoding.
+
+This is **not** a raw URL parser, UTF-8/percent-decoder, control-char validator,
+or filesystem authorization check. Keep those gates in the adapter. The
+unchecked `request_path` constructor remains for compatibility.

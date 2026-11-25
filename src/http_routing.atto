@@ -190,13 +190,18 @@ define module http_routing as
     }
   end
 
+  // Private same-runtime snapshot identity, not an actor/supervisor capability.
+  define class RouterGenerationWitness as
+    val int marker;
+  end
+
   // Decision kinds:
   // 0 = matched route
   // 1 = path not found
   // 2 = method not allowed
   // 3 = automatic OPTIONS
   // 4 = routing limit exceeded
-  // 5 = invalid HTTP method token (fail closed, not a route miss)
+  // 5 = invalid request method
   define class Decision as
     pub val int kind;
     pub val int endpoint_index;
@@ -208,6 +213,7 @@ define module http_routing as
     pub val String route_template;
     pub val bool suppress_body;
     val RequestPath path_value;
+    val RouterGenerationWitness generation_witness;
 
     pub is_match() -> bool {
       return self.kind == 0;
@@ -235,6 +241,11 @@ define module http_routing as
 
     pub path() -> RequestPath {
       return self.path_value;
+    }
+
+    // This is only an inspection fence. No runtime bearer authority is minted.
+    pub from_generation(RouterGenerationWitness expected) -> bool {
+      return self.generation_witness is expected;
     }
   end
 
@@ -628,7 +639,8 @@ define module http_routing as
         self.automatic_head_value,
         self.automatic_options_value,
         self.max_segments_value,
-        self.max_match_steps_value
+        self.max_match_steps_value,
+        new RouterGenerationWitness(0)
       );
     }
   end
@@ -646,9 +658,8 @@ define module http_routing as
     val bool automatic_options_value;
     val int max_segments_value;
     val int max_match_steps_value;
+    val RouterGenerationWitness generation_witness;
 
-    // Request-time gate mirrors registration-time HTTP token validation.
-    // A wildcard route must NEVER dispatch an invalid method token.
     canonical_method(String method_value) -> bool {
       if method_value eq ""; then return false; fi
       let String remaining = method_value;
@@ -781,25 +792,23 @@ define module http_routing as
 
     pub resolve(String method_value, RequestPath request_path_value) -> Decision {
       if request_path_value.size() > self.max_segments_value; then
-        return new Decision(4, -1, -1, -1, -1, -1, "", "", false, new RequestPath(new Array<String>()));
+        return new Decision(4, -1, -1, -1, -1, -1, "", "", false, new RequestPath(new Array<String>()), self.generation_witness);
       fi
 
-      // Reject malformed method bytes before attempting any trie lookup.
-      // In particular, registered any("*") routes must never accept CR/LF,
-      // lowercase or non-token request methods.
+      // Reject malformed method tokens before trie lookup, including any(*) routes.
       if !self.canonical_method(method_value); then
-        return new Decision(5, -1, -1, -1, -1, -1, "", "", false, new RequestPath(new Array<String>()));
+        return new Decision(5, -1, -1, -1, -1, -1, "", "", false, new RequestPath(new Array<String>()), self.generation_witness);
       fi
 
       let mut SearchBudget budget = new SearchBudget(self.max_match_steps_value);
       val int endpoint_index = self.match_node(0, 0, request_path_value, mut budget);
 
       if endpoint_index == -2; then
-        return new Decision(4, -1, -1, -1, -1, -1, "", "", false, new RequestPath(new Array<String>()));
+        return new Decision(4, -1, -1, -1, -1, -1, "", "", false, new RequestPath(new Array<String>()), self.generation_witness);
       fi
 
       if endpoint_index < 0; then
-        return new Decision(1, -1, -1, -1, -1, -1, "", "", false, request_path_value.copy());
+        return new Decision(1, -1, -1, -1, -1, -1, "", "", false, request_path_value.copy(), self.generation_witness);
       fi
 
       val Endpoint endpoint = self.endpoints.get(endpoint_index);
@@ -817,7 +826,7 @@ define module http_routing as
           target.operation_id,
           endpoint.template(),
           method_value eq "HEAD",
-          request_path_value.copy()
+          request_path_value.copy(), self.generation_witness
         );
       fi
 
@@ -832,7 +841,7 @@ define module http_routing as
           "",
           endpoint.template(),
           false,
-          request_path_value.copy()
+          request_path_value.copy(), self.generation_witness
         );
       fi
 
@@ -846,7 +855,7 @@ define module http_routing as
         "",
         endpoint.template(),
         false,
-        request_path_value.copy()
+        request_path_value.copy(), self.generation_witness
       );
     }
 
@@ -882,6 +891,10 @@ define module http_routing as
     }
 
     decision_endpoint(Decision decision) -> int {
+      // Reject foreign or replacement snapshots before inspecting public IDs.
+      if !decision.from_generation(self.generation_witness); then
+        return -1;
+      fi
       if decision.endpoint_index < 0 || decision.endpoint_index >= self.endpoints.size; then
         return -1;
       fi
@@ -915,7 +928,17 @@ define module http_routing as
           || target.operation_id neq decision.operation_id; then
           return -1;
         fi
-      elif decision.kind != 2 && decision.kind != 3; then
+      elif decision.kind == 2 || decision.kind == 3; then
+        // 405 and automatic-OPTIONS are metadata-only decisions. They must
+        // never carry a route target, handler, pipeline or body-suppression
+        // flag. Defend against contradictory Decision metadata even when its
+        // snapshot witness is valid.
+        if decision.target_index != -1 || decision.handler_id != -1
+          || decision.pipeline_id != -1 || decision.contract_id != -1
+          || decision.operation_id neq "" || decision.suppress_body; then
+          return -1;
+        fi
+      else
         return -1;
       fi
       return decision.endpoint_index;
@@ -1044,10 +1067,8 @@ define module http_routing as
   // Only for already decoded segments. Reject traversal tokens without
   // collapsing trailing empties, re-splitting decoded slashes or double decoding.
   pub fnc request_path_checked(Array<String> segments) -> Result<RequestPath, String> {
-    // Bound the decoded path before allocating the defensive copy.
-    // RouterBuilder.set_limits() may choose stricter bounds independently.
     if segments.size > 128; then
-      return Err("decoded path exceeds maximum segment count");
+      return Err("decoded segment count exceeds hard cap of 128");
     fi
     for (const segment of segments) {
       if segment eq "." || segment eq ".."; then

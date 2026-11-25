@@ -1,0 +1,42 @@
+import module http_routing from "../src/http_routing";
+
+// Path specificity precedes HTTP method selection, including HEAD and OPTIONS.
+pub routine main() -> void {
+  val dynamic = http_routing.path("/api/{name}", arr[
+    http_routing.literal("api"), http_routing.param("name")
+  ]);
+  val admin = http_routing.path("/api/admin", arr[
+    http_routing.literal("api"), http_routing.literal("admin")
+  ]);
+  val builder = http_routing.builder();
+  stdio.println(builder.get(rt borrow dynamic, 101).is_ok());
+  stdio.println(builder.post(rt borrow admin, 102).is_ok());
+  val router = builder.build();
+  stdio.println(router.resolve(
+    "GET", http_routing.request_path(arr["api", "admin"])
+  ).is_method_not_allowed());
+  stdio.println(router.resolve(
+    "POST", http_routing.request_path(arr["api", "admin"])
+  ).handler_id == 102);
+  stdio.println(router.resolve(
+    "GET", http_routing.request_path(arr["api", "alice"])
+  ).handler_id == 101);
+  stdio.println(router.resolve(
+    "DELETE", http_routing.request_path(arr["api", "admin"])
+  ).is_method_not_allowed());
+  stdio.println(router.resolve(
+    "HEAD", http_routing.request_path(arr["api", "admin"])
+  ).is_method_not_allowed());
+  val auto_head = router.resolve(
+    "HEAD", http_routing.request_path(arr["api", "alice"])
+  );
+  stdio.println(auto_head.handler_id == 101);
+  stdio.println(auto_head.suppress_body);
+  stdio.println(router.resolve(
+    "OPTIONS", http_routing.request_path(arr["api", "admin"])
+  ).is_automatic_options());
+  stdio.println(router.resolve(
+    "GET", http_routing.request_path(arr["api", ""])
+  ).is_not_found());
+  return;
+}

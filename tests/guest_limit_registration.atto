@@ -1,0 +1,24 @@
+import module http_routing from "../src/http_routing";
+
+pub routine main() -> void {
+  val b = http_routing.builder();
+  stdio.println(b.set_limits(0, 32).is_err());
+  stdio.println(b.set_limits(2, 0).is_err());
+  stdio.println(b.set_limits(2, 32).is_ok());
+  val short_route = http_routing.path("/a/b", arr[
+    http_routing.literal("a"), http_routing.literal("b")
+  ]);
+  val long_route = http_routing.path("/a/b/c", arr[
+    http_routing.literal("a"), http_routing.literal("b"), http_routing.literal("c")
+  ]);
+  stdio.println(b.get(rt borrow long_route, 11).is_err());
+  stdio.println(b.get(rt borrow short_route, 12).is_ok());
+  stdio.println(b.set_limits(1, 32).is_err());
+  stdio.println(b.get(rt borrow short_route, 13).is_err());
+  val router = b.build();
+  stdio.println(router.route_count() == 1);
+  stdio.println(router.resolve("GET", http_routing.request_path(arr["a", "b"])).handler_id == 12);
+  stdio.println(router.resolve("GET", http_routing.request_path(arr["a", "b", "c"])).is_limit_exceeded());
+  stdio.println(router.resolve("GET", http_routing.request_path(arr["a"])).is_not_found());
+  return;
+}

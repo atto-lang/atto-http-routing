@@ -160,7 +160,7 @@ fn route_registration_and_method_resolution_fail_closed_in_atto_source() {
     assert!(size_check < validity_check,
         "large patterns must be rejected before duplicate-name quadratic scanning");
     assert!(source.contains(
-        "return new Decision(5, -1, -1, -1, -1, -1, \"\", \"\", false, new RequestPath(new Array<String>()));"),
+        "return new Decision(5, -1, -1, -1, -1, -1, \"\", \"\", false, new RequestPath(new Array<String>()), self.generation_witness);"),
         "reject invalid methods without copying untrusted request path");
 
     let fixture = fs::read_to_string(root().join("tests/guest_route_name_validation.atto"))
