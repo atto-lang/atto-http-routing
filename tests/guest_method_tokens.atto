@@ -3,17 +3,17 @@ import module http_routing from "../src/http_routing";
 pub routine main() -> void {
   val endpoint = http_routing.path("/method", arr[http_routing.literal("method")]);
   val builder = http_routing.builder();
-  stdio.println(builder.route("GET", endpoint, 11).is_ok());
-  stdio.println(builder.route("M-SEARCH", endpoint, 12).is_ok());
-  stdio.println(builder.route("A+B", endpoint, 13).is_ok());
-  stdio.println(builder.route("X_Y", endpoint, 14).is_ok());
-  stdio.println(builder.route("GET\nBad", endpoint, 91).is_err());
-  stdio.println(builder.route("GET:POST", endpoint, 92).is_err());
-  stdio.println(builder.route("GET/POST", endpoint, 93).is_err());
-  stdio.println(builder.route("get", endpoint, 94).is_err());
-  stdio.println(builder.route("GET,POST", endpoint, 95).is_err());
-  stdio.println(builder.route("GÉT", endpoint, 96).is_err());
-  stdio.println(builder.route("GET", endpoint, 97).is_err());
+  stdio.println(builder.route("GET", rt borrow endpoint, 11).is_ok());
+  stdio.println(builder.route("M-SEARCH", rt borrow endpoint, 12).is_ok());
+  stdio.println(builder.route("A+B", rt borrow endpoint, 13).is_ok());
+  stdio.println(builder.route("X_Y", rt borrow endpoint, 14).is_ok());
+  stdio.println(builder.route("GET\nBad", rt borrow endpoint, 91).is_err());
+  stdio.println(builder.route("GET:POST", rt borrow endpoint, 92).is_err());
+  stdio.println(builder.route("GET/POST", rt borrow endpoint, 93).is_err());
+  stdio.println(builder.route("get", rt borrow endpoint, 94).is_err());
+  stdio.println(builder.route("GET,POST", rt borrow endpoint, 95).is_err());
+  stdio.println(builder.route("GÉT", rt borrow endpoint, 96).is_err());
+  stdio.println(builder.route("GET", rt borrow endpoint, 97).is_err());
 
   val router = builder.build();
   stdio.println(router.resolve("GET", http_routing.request_path(arr["method"])).handler_id == 11);
@@ -22,6 +22,6 @@ pub routine main() -> void {
   stdio.println(router.resolve("X_Y", http_routing.request_path(arr["method"])).handler_id == 14);
   val denied = router.resolve("POST", http_routing.request_path(arr["method"]));
   stdio.println(denied.is_method_not_allowed());
-  stdio.println(router.allow_count(denied) == 6);
+  stdio.println(router.allow_count(rt borrow denied) == 6);
   return;
 }

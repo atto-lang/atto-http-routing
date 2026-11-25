@@ -12,8 +12,8 @@ pub routine main() -> void {
 
   val first_builder = http_routing.builder();
   val second_builder = http_routing.builder();
-  stdio.println(first_builder.get(route, 700).is_ok());
-  stdio.println(second_builder.get(route, 700).is_ok());
+  stdio.println(first_builder.get(rt borrow route, 700).is_ok());
+  stdio.println(second_builder.get(rt borrow route, 700).is_ok());
 
   val first_router = first_builder.build();
   val second_router = second_builder.build();
@@ -22,32 +22,32 @@ pub routine main() -> void {
   );
 
   // The originating router may inspect its own decision as data.
-  stdio.println(!first_router.capture_one(decision_from_first, "id").is_none());
+  stdio.println(!first_router.capture_one(rt borrow decision_from_first, "id").is_none());
 
   // A foreign identical router must NOT authorize lookup from first_router's Decision.
   // A foreign snapshot must be rejected even with identical public metadata.
-  stdio.println(second_router.capture_one(decision_from_first, "id").is_none());
-  stdio.println(second_router.allow_count(decision_from_first) == 0);
-  stdio.println(second_router.allow_method_at(decision_from_first, 0).is_none());
+  stdio.println(second_router.capture_one(rt borrow decision_from_first, "id").is_none());
+  stdio.println(second_router.allow_count(rt borrow decision_from_first) == 0);
+  stdio.println(second_router.allow_method_at(rt borrow decision_from_first, 0).is_none());
 
   // A newly-built identical route snapshot must not inherit old grant authority.
   // This is a snapshot-isolation proxy, NOT a full hot-upgrade/supervisor test.
   val replacement_builder = http_routing.builder();
-  stdio.println(replacement_builder.get(route, 700).is_ok());
+  stdio.println(replacement_builder.get(rt borrow route, 700).is_ok());
   val replacement_router = replacement_builder.build();
-  stdio.println(replacement_router.capture_one(decision_from_first, "id").is_none());
-  stdio.println(replacement_router.allow_count(decision_from_first) == 0);
-  stdio.println(replacement_router.allow_method_at(decision_from_first, 0).is_none());
+  stdio.println(replacement_router.capture_one(rt borrow decision_from_first, "id").is_none());
+  stdio.println(replacement_router.allow_count(rt borrow decision_from_first) == 0);
+  stdio.println(replacement_router.allow_method_at(rt borrow decision_from_first, 0).is_none());
   // Even a second build from the *same* Builder mints a fresh snapshot.
   val rebuilt_from_first = first_builder.build();
-  stdio.println(rebuilt_from_first.capture_one(decision_from_first, "id").is_none());
-  stdio.println(rebuilt_from_first.allow_count(decision_from_first) == 0);
-  stdio.println(rebuilt_from_first.allow_method_at(decision_from_first, 0).is_none());
+  stdio.println(rebuilt_from_first.capture_one(rt borrow decision_from_first, "id").is_none());
+  stdio.println(rebuilt_from_first.allow_count(rt borrow decision_from_first) == 0);
+  stdio.println(rebuilt_from_first.allow_method_at(rt borrow decision_from_first, 0).is_none());
   val decision_from_rebuild = rebuilt_from_first.resolve(
     "GET", http_routing.request_path(arr["users", "42"])
   );
-  stdio.println(!rebuilt_from_first.capture_one(decision_from_rebuild, "id").is_none());
-  stdio.println(first_router.capture_one(decision_from_rebuild, "id").is_none());
-  stdio.println(first_router.allow_count(decision_from_rebuild) == 0);
+  stdio.println(!rebuilt_from_first.capture_one(rt borrow decision_from_rebuild, "id").is_none());
+  stdio.println(first_router.capture_one(rt borrow decision_from_rebuild, "id").is_none());
+  stdio.println(first_router.allow_count(rt borrow decision_from_rebuild) == 0);
   return;
 }

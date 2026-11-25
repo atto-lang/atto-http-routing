@@ -5,9 +5,9 @@ pub routine main() -> void {
   val first = http_routing.path("/items", arr[http_routing.literal("items")]);
   val later = http_routing.path("/later", arr[http_routing.literal("later")]);
   val builder = http_routing.builder();
-  stdio.println(builder.get(first, 501).is_ok());
+  stdio.println(builder.get(rt borrow first, 501).is_ok());
   val snapshot_one = builder.build();
-  stdio.println(builder.get(later, 502).is_ok());
+  stdio.println(builder.get(rt borrow later, 502).is_ok());
   val snapshot_two = builder.build();
   stdio.println(snapshot_one.resolve(
     "GET", http_routing.request_path(arr["items"])
@@ -21,19 +21,19 @@ pub routine main() -> void {
   stdio.println(snapshot_two.resolve(
     "GET", http_routing.request_path(arr["items"])
   ).handler_id == 501);
-  stdio.println(builder.get(first, 999).is_err());
+  stdio.println(builder.get(rt borrow first, 999).is_err());
   stdio.println(snapshot_one.resolve(
     "GET", http_routing.request_path(arr["items"])
   ).handler_id == 501);
 
   val foreign_builder = http_routing.builder();
-  stdio.println(foreign_builder.get(later, 701).is_ok());
+  stdio.println(foreign_builder.get(rt borrow later, 701).is_ok());
   val foreign_router = foreign_builder.build();
   val foreign_decision = foreign_router.resolve(
     "GET", http_routing.request_path(arr["later"])
   );
-  stdio.println(snapshot_one.allow_count(foreign_decision) == 0);
-  stdio.println(snapshot_one.allow_method_at(foreign_decision, 0).is_none());
-  stdio.println(snapshot_one.capture_one(foreign_decision, "id").is_none());
+  stdio.println(snapshot_one.allow_count(rt borrow foreign_decision) == 0);
+  stdio.println(snapshot_one.allow_method_at(rt borrow foreign_decision, 0).is_none());
+  stdio.println(snapshot_one.capture_one(rt borrow foreign_decision, "id").is_none());
   return;
 }

@@ -11,10 +11,10 @@ pub routine main() -> void {
   val long_route = http_routing.path("/a/b/c", arr[
     http_routing.literal("a"), http_routing.literal("b"), http_routing.literal("c")
   ]);
-  stdio.println(b.get(long_route, 11).is_err());
-  stdio.println(b.get(short_route, 12).is_ok());
+  stdio.println(b.get(rt borrow long_route, 11).is_err());
+  stdio.println(b.get(rt borrow short_route, 12).is_ok());
   stdio.println(b.set_limits(1, 32).is_err());
-  stdio.println(b.get(short_route, 13).is_err());
+  stdio.println(b.get(rt borrow short_route, 13).is_err());
   val router = b.build();
   stdio.println(router.route_count() == 1);
   stdio.println(router.resolve("GET", http_routing.request_path(arr["a", "b"])).handler_id == 12);
