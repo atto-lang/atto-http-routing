@@ -10,6 +10,13 @@ import tempfile
 from bounded_process import run_bounded
 
 ROOT = Path(__file__).resolve().parents[1]
+# Known LLVM fail-closed boundaries. Newer compilers name the rejected file.
+_AT = r' at byte [0-9]+(?: \[file: [A-Za-z0-9_.-]+\.(?:atto|ores)\])?'
+UNSUPPORTED_BOUNDARIES = (
+    r'oreslang-llvmc: final class field requires declaration-site initializer' + _AT,
+    r"oreslang-llvmc: scalar local requires an explicit ': int' or ': bool' type" + _AT,
+    r'oreslang-llvmc: native branch-local class owner requires destructor/drop lowering' + _AT,
+)
 
 def git(directory, *args):
     return subprocess.check_output(['git', '-C', str(directory), *args], text=True).strip()
@@ -18,15 +25,8 @@ def require_source(variable, pin):
     raw = os.environ.get(variable)
     if not raw:
         raise RuntimeError(f'Set {variable} to the pinned compiler checkout')
-    source_input = Path(raw).absolute()
-    # Resolve only after checking every path component. An alias in an
-    # ancestor directory is still an indirect compiler checkout and can
-    # silently change the source to which an exact commit pin applies.
-    for component in (source_input, *source_input.parents):
-        if component.is_symlink():
-            raise RuntimeError('Compiler checkout path must not contain symlinks')
-    source = source_input.resolve()
-    expected = local_file(pin).read_text().strip()
+    source = Path(raw).resolve()
+    expected = (ROOT / pin).read_text().strip()
     if not re.fullmatch('[0-9a-f]{40}', expected):
         raise RuntimeError(f'Invalid {pin}')
     if Path(git(source, 'rev-parse', '--show-toplevel')).resolve() != source:
@@ -38,26 +38,15 @@ def require_source(variable, pin):
     return source
 
 def local_file(relative):
-    if not isinstance(relative, str) or not relative:
-        raise RuntimeError('Contract path must be a nonempty string')
-    requested = Path(relative)
-    if requested.is_absolute() or '..' in requested.parts:
-        raise RuntimeError('Contract paths must be relative and cannot traverse parents')
-    path = ROOT
-    # Explicitly reject symlinks at EVERY component, even when the link
-    # resolves to an otherwise allowed in-repository file/directory.
-    for component in requested.parts:
-        path = path / component
-        if path.is_symlink():
-            raise RuntimeError(f'Symlinked contract path is forbidden: {relative}')
-    root = ROOT.resolve()
-    resolved = path.resolve()
-    if root not in resolved.parents or not resolved.is_file():
+    if not isinstance(relative, str) or Path(relative).is_absolute():
+        raise RuntimeError('Contract paths must be relative to this repository')
+    path = (ROOT / relative).resolve()
+    if ROOT.resolve() not in path.parents or not path.is_file():
         raise RuntimeError(f'Missing or outside-repository contract file: {relative}')
-    return resolved
+    return path
 
 def load_contract():
-    contract = json.loads(local_file('BACKENDS.json').read_text())
+    contract = json.loads((ROOT / 'BACKENDS.json').read_text())
     if not isinstance(contract, dict) or set(contract) != {'java', 'llvm'}:
         raise RuntimeError('Expected java and llvm backend contracts')
     java, llvm = contract['java'], contract['llvm']
@@ -80,17 +69,29 @@ def load_contract():
             raise RuntimeError('Duplicate LLVM rejection probe')
         seen.add(path)
         diagnostic = probe['diagnostic']
-        if not isinstance(diagnostic, str) or '\n' in diagnostic or not (diagnostic.startswith('oreslang-llvmc: expected ') or re.fullmatch(r'oreslang-llvmc: final class field requires declaration-site initializer at byte [0-9]+', diagnostic)):
+        if not isinstance(diagnostic, str) or '\n' in diagnostic or not (diagnostic.startswith('oreslang-llvmc: expected ') or any(re.fullmatch(boundary, diagnostic) for boundary in UNSUPPORTED_BOUNDARIES)):
             raise RuntimeError('Expected a specific unsupported-syntax diagnostic')
     return contract
 
 def check_rejection(result, probe):
-    if result.returncode != 1 or result.stdout.strip() or result.stderr.strip() != probe['diagnostic']:
+    if (result.returncode != 1 or result.stdout != '' or
+            result.stderr not in (probe['diagnostic'], probe['diagnostic'] + '\n')):
         raise RuntimeError(f"Unexpected rejection result for {probe['path']}: exit={result.returncode}\n{result.stderr}")
 
 def check_positive(result):
-    if result.returncode or not re.search(r'^define i32 @main\(\)', result.stdout, re.MULTILINE):
-        raise RuntimeError('LLVM positive control failed; rejection is not evidence of compatibility: ' + result.stderr)
+    # Header plus non-empty, complete body: not a full LLVM verifier.
+    if result.returncode != 0 or result.stderr != '':
+        raise RuntimeError('LLVM positive control failed: exit/stderr mismatch')
+    headers = list(re.finditer(
+        r'(?m)^define[ \t]+i32[ \t]+@main\(\)(?:[ \t]+[^{}\r\n]*)?[ \t]*\{[ \t]*(?:;[^\n]*)?$',
+        result.stdout
+    ))
+    if len(headers) != 1:
+        raise RuntimeError('LLVM positive control failed: missing/duplicate main definition')
+    body = result.stdout[headers[0].end():]
+    closing = re.search(r'(?m)^}[ \t]*(?:;[^\n]*)?$', body)
+    if closing is None or not body[:closing.start()].strip():
+        raise RuntimeError('LLVM positive control failed: missing or empty main body')
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

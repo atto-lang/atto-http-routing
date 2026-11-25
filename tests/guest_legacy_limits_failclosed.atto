@@ -1,0 +1,42 @@
+import module http_routing from "../src/http_routing";
+
+// Path, search budget and invalid registration must fail closed.
+pub routine main() -> void {
+  val builder = http_routing.builder();
+  stdio.println(builder.set_limits(2, 64).is_ok());
+  val route = http_routing.path("/r/x", arr[
+    http_routing.literal("r"),
+    http_routing.literal("x")
+  ]);
+  stdio.println(builder.get(route, 77).is_ok());
+  val router = builder.build();
+
+  val match_result = router.resolve("GET", http_routing.request_path(arr["r", "x"]));
+  stdio.println(match_result.is_match());
+  stdio.println(match_result.handler_id == 77);
+
+  val overlong = router.resolve(
+    "GET", http_routing.request_path(arr["r", "x", "extra"])
+  );
+  stdio.println(overlong.is_limit_exceeded());
+  stdio.println(router.allow_count(overlong) == 0);
+  stdio.println(router.allow_method_at(overlong, 0).is_none());
+  stdio.println(router.capture_one(overlong, "id").is_none());
+
+  stdio.println(router.resolve(
+    "GET", http_routing.request_path(arr["r"])
+  ).is_not_found());
+  stdio.println(builder.set_limits(0, 64).is_err());
+  stdio.println(builder.set_limits(2, 0).is_err());
+
+  val illegal = http_routing.path("/r/*tail/after", arr[
+    http_routing.literal("r"),
+    http_routing.wildcard("tail"),
+    http_routing.literal("after")
+  ]);
+  stdio.println(builder.get(illegal, 78).is_err());
+
+  val smaller = builder.set_limits(1, 64);
+  stdio.println(smaller.is_err());
+  return;
+}

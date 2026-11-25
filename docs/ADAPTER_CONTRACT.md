@@ -10,6 +10,12 @@ custom extension method. Matching is case-sensitive in the core.
 
 Do not silently rewrite an unknown method to GET.
 
+Registration admits only uppercase ASCII HTTP `tchar` tokens (such as `GET`
+and `M-SEARCH`), plus the existing `*` route wildcard. It rejects CR/LF,
+NUL, spaces, commas, colons, lowercase and non-ASCII before changing builder
+state. Methods can flow into `Allow`; adapters must separately validate raw
+ingress methods and outgoing header values.
+
 ## Path segmentation
 
 Split the request-target path on '/' before percent-decoding segment contents.
@@ -31,7 +37,9 @@ Canonical examples:
 - '/users/' -> ['users', '']
 - '/a//b' -> ['a', '', 'b']
 
-The router itself receives only the Array<String> of path segments.
+The router itself receives only the Array<String> of path segments. Named parameters never
+capture empty decoded segments; use an explicit `literal("")` or terminal
+wildcard for intentional empty segments.
 
 ## Validation before routing
 
@@ -78,65 +86,13 @@ isolated actor. Extract immutable scalar strings and place them in the actor's
 request capability before transferring it. Keep handler objects in the host
 adapter's registry; routing metadata contains only scalar IDs and operation names.
 
-## Decision provenance and generation scope
+## Optional checked decoded-segment constructor
 
-A `Decision` is a routing result, **not** a proof of authority or a
-generation-stable handle. Keep it together with the exact immutable `Router`
-snapshot that produced it. Do not pass a decision from one router generation to
-another (including hot-reload replacements), and do not accept a
-caller-constructed `Decision` as an authorization signal.
+`http_routing.request_path_checked(segments)` is an additive guard for
+already split, already decoded segments. It rejects exact decoded `.` or `..`
+segments while preserving trailing empties, decoded slashes within their
+original segment, and percent-literal content without double decoding.
 
-The router now checks a decision's endpoint range, route template, bound handler
-metadata, and path shape before `capture`, `capture_one`, `allow_count`,
-and `allow_method_at` dereference route data. Invalid decisions fail closed:
-captures/Allow entries are `None` and the Allow count is zero. These checks
-prevent accidental stale or mismatched data access; they are **not**
-cryptographic or unforgeable router-generation attestation. The adapter must
-derive authorization solely from its own generation-scoped route/handler
-registry and request capability. In-flight requests must retain their original
-router snapshot until dispatch completes.
-
-## Additional router guest edge matrix
-
-`scripts/test.sh` still executes the historical `router_semantics.ores`
-with `tests/expected.txt`, then executes **every** paired
-`tests/edge_cases/*.ores` and `.expected` fixture. Missing, empty,
-orphaned, or symlinked files fail before edge guests execute; at least three
-independent cases are required.
-
-- `head-options.ores` (15 assertions): GET/HEAD fallback, suppressed HEAD
-  body, automatic OPTIONS, ordered Allow enumeration, POST 405-equivalent
-  decision (without network serialization).
-- `foreign-decision.ores` (11 assertions): cross-router decisions with
-  reused endpoint slots/templates and mismatched handler/operation metadata
-  cannot be used for capture extraction or Allow enumeration.
-- `limits-failclosed.ores` (13 assertions): path length, invalid limit
-  configuration, missing paths, invalid terminal wildcard registration, and
-  fail-closed decision inspection.
-
-A source-only check does not constitute an Oreslang compiler or runtime test.
-`Decision` remains transport-neutral data, not an authorization capability.
-
-## Bounded guest execution and process lifetime
-
-`scripts/test.sh` invokes every positive guest through
-`python3 scripts/run-guest.py`, which uses `bounded_process.run_bounded`
-with a **120-second per-invocation timeout** and a **2 MiB combined stdout
-plus stderr budget**. Check and run are separate bounded processes. A timeout
-exits 124; a budget, invalid UTF-8 or leaked-pipe error exits 70, and no
-partial stdout is accepted as a test oracle. Ordinary compiler error exit
-codes and diagnostics are preserved. This does not impose memory/CPU
-cgroups, a syscall sandbox, or a network sandbox.
-
-On POSIX runners the wrapper launches the guest in its own process session.
-It kills that process group after the root exits, including otherwise
-silent descendants *remaining in the same group*. A child that creates a new
-process session, escapes the group, or obtains external authority is outside
-this mechanism; an OS-level sandbox or cgroup is required for that stronger
-guarantee. These protections are host-side **test-execution controls**, not
-native Oreslang runtime isolation.
-
-`scripts/test-backend-checker.py` includes host regressions for these
-behaviors. All actual native guest output oracles still require a complete,
-authorized checkout and an executable pinned compiler. A source-free mocked
-runner pass must not be credited as a native routing test.
+This is **not** a raw URL parser, UTF-8/percent-decoder, control-char validator,
+or filesystem authorization check. Keep those gates in the adapter. The
+unchecked `request_path` constructor remains for compatibility.

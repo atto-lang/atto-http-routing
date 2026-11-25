@@ -1,4 +1,4 @@
-"""Bound captured guest output and kill its entire subprocess group on failure."""
+"""Bound captured compiler output while the process is running."""
 import os
 import signal
 import subprocess
@@ -8,18 +8,22 @@ import threading
 def run_bounded(argv, timeout=30, max_bytes=1024 * 1024):
     if timeout <= 0 or max_bytes <= 0:
         raise ValueError('positive timeout and output budget required')
-    # Isolate the compiler/guest from the CI job's own process group. A guest
-    # must not keep a compiler subprocess alive after its parent exits.
+    # POSIX: isolate the compiler process group so its subprocesses cannot
+    # retain output pipes or continue running after cancellation.
+    isolated = os.name == 'posix'
     process = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                               start_new_session=True)
+                               start_new_session=isolated)
     chunks = [bytearray(), bytearray()]
     lock = threading.Lock()
     exceeded = threading.Event()
     total = 0
 
-    def kill_group():
+    def stop():
         try:
-            os.killpg(process.pid, signal.SIGKILL)
+            if isolated:
+                os.killpg(process.pid, signal.SIGKILL)
+            else:
+                process.kill()
         except ProcessLookupError:
             pass
 
@@ -34,12 +38,9 @@ def run_bounded(argv, timeout=30, max_bytes=1024 * 1024):
                     remaining = max_bytes - total
                     chunks[slot].extend(block[:max(0, remaining)])
                     total += len(block)
-                    over_budget = total > max_bytes
-                    if over_budget:
+                    if total > max_bytes:
                         exceeded.set()
-                if over_budget:
-                    kill_group()
-                    break
+                        stop()
         finally:
             pipe.close()
 
@@ -47,27 +48,20 @@ def run_bounded(argv, timeout=30, max_bytes=1024 * 1024):
                for i, pipe in enumerate((process.stdout, process.stderr))]
     for reader in readers:
         reader.start()
-    timed_out = False
     try:
         process.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        timed_out = True
-        kill_group()
+        stop()
         process.wait()
+        raise
     finally:
         for reader in readers:
             reader.join(timeout=1)
-    pipes_open = any(reader.is_alive() for reader in readers)
-    # Even a descendant that closes its standard streams must not outlive its
-    # guest invocation. Destroy the session after the root process exits.
-    kill_group()
-    if pipes_open:
-        # A leaked stdout/stderr descriptor must not count as successful output.
+    orphaned_pipes = any(reader.is_alive() for reader in readers)
+    if orphaned_pipes:
+        stop()
         for reader in readers:
             reader.join(timeout=1)
-    if timed_out:
-        raise subprocess.TimeoutExpired(argv, timeout)
-    if pipes_open:
         raise RuntimeError('compiler output pipes remained open after process exit')
     if exceeded.is_set():
         raise RuntimeError('compiler output budget exceeded')
