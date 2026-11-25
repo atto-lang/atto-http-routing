@@ -1,5 +1,7 @@
-# PR #11 reconciliation
+# Historical PR #11 — snapshot fence reconciliation
 
-Historical head 202466f66261f16f189f36546c341279b840f6b1; current main 5d9b2a72997e334c0aec518ef2cf243694d0d177.
+The original snapshot-fence implementation is present in canonical main at 5d9b2a72997e334c0aec518ef2cf243694d0d177. Its original ten assertions are covered by the 16-line golden for `tests/guest_generation_witness.atto`. The separate decision-kind matrix has 29 print call sites, including three mutually exclusive alternatives, for 26 executed assertions. The existing runner checks a clean pinned compiler checkout, discovers both guest/golden pairs and compares exact stdout. The generation witness, per-build allocation, decision fence, bounded replay and committed goldens are unchanged.
 
-Every non-comment nonblank statement in the historical 10-assertion generation fixture is present in main's canonical 16-assertion guest_generation_witness.atto. Main also provides a separate decision-kind matrix and bounded structural decision checks. Retain current code and goldens; migrate the existing witness fixture to implicit borrowing. PR #2 overlaps the full syntax migration and needs combined retesting. The old standalone runner is superseded by the main guest glob for this fixture, but historical runner differences still require audit. The scope in docs/GENERATION_FENCE_SCOPE.md remains binding: snapshot identity is not runtime-minted authority, tenant/supervisor revocation, actor ownership or cross-isolate safety. No guest execution or release-readiness claim for this commit.
+This is a documentation-only disposition of the historical work. The Atto syntax migration and current compiler validation remain on PR #2; the additional historical decision fixtures remain on PR #9. No pending implementation or test changes are integrated through this disposition. Squash integration avoids bringing unrelated stacked commits into main.
+
+The release gate in `docs/GENERATION_FENCE_SCOPE.md` remains unchanged. No claim of tenant/supervisor authority, revocation, cross-isolate execution, native guest execution on the current compiler, or backend parity is made.

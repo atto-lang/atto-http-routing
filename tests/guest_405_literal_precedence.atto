@@ -9,8 +9,8 @@ pub routine main() -> void {
     http_routing.literal("api"), http_routing.literal("admin")
   ]);
   val builder = http_routing.builder();
-  stdio.println(builder.get(dynamic, 101).is_ok());
-  stdio.println(builder.post(admin, 102).is_ok());
+  stdio.println(builder.get(rt borrow dynamic, 101).is_ok());
+  stdio.println(builder.post(rt borrow admin, 102).is_ok());
   val router = builder.build();
   stdio.println(router.resolve(
     "GET", http_routing.request_path(arr["api", "admin"])

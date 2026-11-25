@@ -3,11 +3,11 @@ import module http_routing from "../src/http_routing";
 pub routine main() -> void {
   val p = http_routing.path("/multi", arr[http_routing.literal("multi")]);
   val b = http_routing.builder();
-  stdio.println(b.any(p, 81).is_ok());
-  stdio.println(b.post(p, 82).is_ok());
-  stdio.println(b.route("M-SEARCH", p, 83).is_ok());
-  stdio.println(b.any(p, 84).is_err());
-  stdio.println(b.post(p, 85).is_err());
+  stdio.println(b.any(rt borrow p, 81).is_ok());
+  stdio.println(b.post(rt borrow p, 82).is_ok());
+  stdio.println(b.route("M-SEARCH", rt borrow p, 83).is_ok());
+  stdio.println(b.any(rt borrow p, 84).is_err());
+  stdio.println(b.post(rt borrow p, 85).is_err());
   val router = b.build();
   stdio.println(router.route_count() == 1);
   stdio.println(router.resolve("GET", http_routing.request_path(arr["multi"])).handler_id == 81);
