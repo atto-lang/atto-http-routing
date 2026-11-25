@@ -12,23 +12,23 @@ pub routine main() -> void {
     http_routing.literal("capture"), http_routing.wildcard("rest")
   ]);
   val builder = http_routing.builder();
-  stdio.println(builder.get(rt borrow named, 21).is_ok());
-  stdio.println(builder.get(rt borrow empty_literal, 22).is_ok());
-  stdio.println(builder.get(rt borrow wildcard, 23).is_ok());
+  stdio.println(builder.get(named, 21).is_ok());
+  stdio.println(builder.get(empty_literal, 22).is_ok());
+  stdio.println(builder.get(wildcard, 23).is_ok());
   val router = builder.build();
 
   val id_match = router.resolve("GET", http_routing.request_path(arr["capture", "alpha"]));
   stdio.println(id_match.handler_id == 21);
-  stdio.println(router.capture_one(rt borrow id_match, "id").unwrap() == "alpha");
+  stdio.println(router.capture_one(id_match, "id").unwrap() eq "alpha");
   val empty_match = router.resolve("GET", http_routing.request_path(arr["capture", ""]));
   stdio.println(empty_match.handler_id == 22);
-  stdio.println(router.capture_one(rt borrow empty_match, "id").is_none());
+  stdio.println(router.capture_one(empty_match, "id").is_none());
   stdio.println(router.resolve("GET", http_routing.request_path(arr["capture"])).handler_id == 23);
   val wildcard_match = router.resolve(
     "GET", http_routing.request_path(arr["capture", "", "extra"])
   );
   stdio.println(wildcard_match.handler_id == 23);
-  stdio.println(router.capture(rt borrow wildcard_match, "rest").unwrap().size() == 2);
+  stdio.println(router.capture(wildcard_match, "rest").unwrap().size() == 2);
   stdio.println(router.resolve(
     "GET", http_routing.request_path(arr["capture", "alpha", "extra"])
   ).handler_id == 23);

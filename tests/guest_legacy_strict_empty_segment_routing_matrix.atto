@@ -1,0 +1,30 @@
+import module http_routing from "../src/http_routing";
+
+// Empty segments are meaningful: root, trailing slash, and repeated slash differ.
+pub routine main() -> void {
+  val builder = http_routing.builder();
+  val root = http_routing.root();
+  val one = http_routing.path("/p", arr[http_routing.literal("p")]);
+  val trailing = http_routing.path("/p/", arr[
+    http_routing.literal("p"),
+    http_routing.literal("")
+  ]);
+  stdio.println(builder.get(root, 10).is_ok());
+  stdio.println(builder.get(one, 11).is_ok());
+  stdio.println(builder.get(trailing, 12).is_ok());
+  val router = builder.build();
+  stdio.println(router.route_count() == 3);
+  stdio.println(router.resolve("GET", http_routing.request_path(arr[])).handler_id == 10);
+  stdio.println(router.resolve("GET", http_routing.request_path(arr["p"])).handler_id == 11);
+  stdio.println(router.resolve("GET", http_routing.request_path(arr["p",""])).handler_id == 12);
+  stdio.println(router.resolve("GET", http_routing.request_path(arr["p","",""])).is_not_found());
+  stdio.println(router.resolve("GET", http_routing.request_path(arr[""])).is_not_found());
+  val trailing_head = router.resolve("HEAD", http_routing.request_path(arr["p",""]));
+  stdio.println(trailing_head.is_match());
+  stdio.println(trailing_head.handler_id == 12);
+  stdio.println(trailing_head.suppress_body);
+  val wrong = router.resolve("POST", http_routing.request_path(arr["p",""]));
+  stdio.println(wrong.is_method_not_allowed());
+  stdio.println(router.allow_count(wrong) == 3);
+  return;
+}
