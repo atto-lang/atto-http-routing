@@ -1,0 +1,42 @@
+import module http_routing from "../src/http_routing";
+
+// Literal-empty, nonempty named capture, and terminal wildcard precedence.
+pub routine main() -> void {
+  val named = http_routing.path("/capture/{id}", arr[
+    http_routing.literal("capture"), http_routing.param("id")
+  ]);
+  val empty_literal = http_routing.path("/capture/", arr[
+    http_routing.literal("capture"), http_routing.literal("")
+  ]);
+  val wildcard = http_routing.path("/capture/*rest", arr[
+    http_routing.literal("capture"), http_routing.wildcard("rest")
+  ]);
+  val builder = http_routing.builder();
+  stdio.println(builder.get(rt borrow named, 21).is_ok());
+  stdio.println(builder.get(rt borrow empty_literal, 22).is_ok());
+  stdio.println(builder.get(rt borrow wildcard, 23).is_ok());
+  val router = builder.build();
+
+  val id_match = router.resolve("GET", http_routing.request_path(arr["capture", "alpha"]));
+  stdio.println(id_match.handler_id == 21);
+  stdio.println(router.capture_one(rt borrow id_match, "id").unwrap() == "alpha");
+  val empty_match = router.resolve("GET", http_routing.request_path(arr["capture", ""]));
+  stdio.println(empty_match.handler_id == 22);
+  stdio.println(router.capture_one(rt borrow empty_match, "id").is_none());
+  stdio.println(router.resolve("GET", http_routing.request_path(arr["capture"])).handler_id == 23);
+  val wildcard_match = router.resolve(
+    "GET", http_routing.request_path(arr["capture", "", "extra"])
+  );
+  stdio.println(wildcard_match.handler_id == 23);
+  stdio.println(router.capture(rt borrow wildcard_match, "rest").unwrap().size() == 2);
+  stdio.println(router.resolve(
+    "GET", http_routing.request_path(arr["capture", "alpha", "extra"])
+  ).handler_id == 23);
+  stdio.println(router.resolve(
+    "GET", http_routing.request_path(arr["capture", "beta"])
+  ).handler_id == 21);
+  stdio.println(router.resolve(
+    "GET", http_routing.request_path(arr["elsewhere"])
+  ).is_not_found());
+  return;
+}

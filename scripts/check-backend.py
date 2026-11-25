@@ -74,12 +74,24 @@ def load_contract():
     return contract
 
 def check_rejection(result, probe):
-    if result.returncode != 1 or result.stdout.strip() or result.stderr.strip() != probe['diagnostic']:
+    if (result.returncode != 1 or result.stdout != '' or
+            result.stderr not in (probe['diagnostic'], probe['diagnostic'] + '\n')):
         raise RuntimeError(f"Unexpected rejection result for {probe['path']}: exit={result.returncode}\n{result.stderr}")
 
 def check_positive(result):
-    if result.returncode or not re.search(r'^define i32 @main\(\)', result.stdout, re.MULTILINE):
-        raise RuntimeError('LLVM positive control failed; rejection is not evidence of compatibility: ' + result.stderr)
+    # Header plus non-empty, complete body: not a full LLVM verifier.
+    if result.returncode != 0 or result.stderr != '':
+        raise RuntimeError('LLVM positive control failed: exit/stderr mismatch')
+    headers = list(re.finditer(
+        r'(?m)^define[ \t]+i32[ \t]+@main\(\)(?:[ \t]+[^{}\r\n]*)?[ \t]*\{[ \t]*(?:;[^\n]*)?$',
+        result.stdout
+    ))
+    if len(headers) != 1:
+        raise RuntimeError('LLVM positive control failed: missing/duplicate main definition')
+    body = result.stdout[headers[0].end():]
+    closing = re.search(r'(?m)^}[ \t]*(?:;[^\n]*)?$', body)
+    if closing is None or not body[:closing.start()].strip():
+        raise RuntimeError('LLVM positive control failed: missing or empty main body')
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

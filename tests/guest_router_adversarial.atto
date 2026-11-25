@@ -1,0 +1,276 @@
+// Issue #22: deterministic adversarial cases against the pure decoded-segment router.
+// Every assertion prints true; registration errors and 405s are EXPECTED negatives.
+// No HTTP parser, percent decoder, socket, TLS, or actor scheduler is exercised.
+import module http_routing from "../src/http_routing";
+
+fnc expect(bool condition) -> void {
+  stdio.println(condition);
+  return;
+}
+
+pub routine main() -> void {
+  val fixed = http_routing.path("/a/fixed", arr[
+    http_routing.literal("a"), http_routing.literal("fixed")
+  ]);
+  val parameter = http_routing.path("/a/{id}", arr[
+    http_routing.literal("a"), http_routing.param("id")
+  ]);
+  val tail = http_routing.path("/a/*tail", arr[
+    http_routing.literal("a"), http_routing.wildcard("tail")
+  ]);
+  val detail = http_routing.path("/a/fixed/details", arr[
+    http_routing.literal("a"), http_routing.literal("fixed"), http_routing.literal("details")
+  ]);
+  val edit = http_routing.path("/a/{id}/edit", arr[
+    http_routing.literal("a"), http_routing.param("id"), http_routing.literal("edit")
+  ]);
+
+  // R01: same trie built in forward/reverse registration order.
+  val forward = http_routing.builder();
+  expect(forward.get(rt borrow fixed, 101).is_ok());
+  expect(forward.get(rt borrow parameter, 102).is_ok());
+  expect(forward.get(rt borrow tail, 103).is_ok());
+  expect(forward.get(rt borrow detail, 104).is_ok());
+  expect(forward.get(rt borrow edit, 105).is_ok());
+  expect(forward.post(rt borrow parameter, 106).is_ok());
+
+  val reverse = http_routing.builder();
+  expect(reverse.post(rt borrow parameter, 106).is_ok());
+  expect(reverse.get(rt borrow edit, 105).is_ok());
+  expect(reverse.get(rt borrow detail, 104).is_ok());
+  expect(reverse.get(rt borrow tail, 103).is_ok());
+  expect(reverse.get(rt borrow parameter, 102).is_ok());
+  expect(reverse.get(rt borrow fixed, 101).is_ok());
+
+  val older = forward.build();
+  val other_order = reverse.build();
+  expect(older.route_count() == 5 && other_order.route_count() == 5);
+
+  // R02: static > parameter > wildcard, backtracking, zero/multi-tail.
+  expect(older.resolve("GET", http_routing.request_path(arr["a", "fixed"])).handler_id == 101);
+  expect(other_order.resolve("GET", http_routing.request_path(arr["a", "fixed"])).handler_id == 101);
+  expect(older.resolve("GET", http_routing.request_path(arr["a", "x"])).handler_id == 102);
+  expect(other_order.resolve("GET", http_routing.request_path(arr["a", "x"])).handler_id == 102);
+  expect(older.resolve("GET", http_routing.request_path(arr["a", "x", "y"])).handler_id == 103);
+  expect(other_order.resolve("GET", http_routing.request_path(arr["a", "x", "y"])).handler_id == 103);
+  expect(older.resolve("GET", http_routing.request_path(arr["a", "fixed", "details"])).handler_id == 104);
+  expect(other_order.resolve("GET", http_routing.request_path(arr["a", "fixed", "details"])).handler_id == 104);
+  val backtrack_a = older.resolve("GET", http_routing.request_path(arr["a", "fixed", "edit"]));
+  val backtrack_b = other_order.resolve("GET", http_routing.request_path(arr["a", "fixed", "edit"]));
+  expect(backtrack_a.handler_id == 105 && backtrack_b.handler_id == 105);
+  expect(older.capture_one(rt borrow backtrack_a, "id").unwrap() == "fixed");
+  expect(other_order.capture_one(rt borrow backtrack_b, "id").unwrap() == "fixed");
+  val empty_tail = older.resolve("GET", http_routing.request_path(arr["a"]));
+  expect(empty_tail.handler_id == 103);
+  expect(older.capture(rt borrow empty_tail, "tail").unwrap().size() == 0);
+
+  // R03: method dispatch is path-first; HEAD/OPTIONS are policy, not transport.
+  val method_denied = older.resolve("POST", http_routing.request_path(arr["a", "fixed"]));
+  expect(method_denied.is_method_not_allowed());
+  expect(older.allow_count(rt borrow method_denied) == 3);
+  expect(other_order.resolve("POST", http_routing.request_path(arr["a", "fixed"])).is_method_not_allowed());
+  expect(older.resolve("POST", http_routing.request_path(arr["a", "x"])).handler_id == 106);
+  val head = older.resolve("HEAD", http_routing.request_path(arr["a", "fixed"]));
+  expect(head.handler_id == 101 && head.suppress_body);
+  expect(older.resolve("OPTIONS", http_routing.request_path(arr["a", "fixed"])).is_automatic_options());
+  expect(older.resolve("GET", http_routing.request_path(arr["absent"])).is_not_found());
+
+  // Explicit HEAD/OPTIONS beat automatic fallback/synthesis.
+  val explicit_methods = http_routing.builder();
+  expect(explicit_methods.get(rt borrow fixed, 401).is_ok());
+  expect(explicit_methods.head(rt borrow fixed, 402).is_ok());
+  expect(explicit_methods.options(rt borrow fixed, 403).is_ok());
+  val explicit_router = explicit_methods.build();
+  val explicit_head = explicit_router.resolve(
+    "HEAD", http_routing.request_path(arr["a", "fixed"])
+  );
+  expect(explicit_head.handler_id == 402 && explicit_head.suppress_body);
+  val explicit_options = explicit_router.resolve(
+    "OPTIONS", http_routing.request_path(arr["a", "fixed"])
+  );
+  expect(explicit_options.handler_id == 403 && !explicit_options.is_automatic_options());
+
+  // Bounded search exhaustion and path length are distinct from not-found.
+  val bounded_builder = http_routing.builder();
+  expect(bounded_builder.set_limits(2, 2).is_ok());
+  expect(bounded_builder.get(rt borrow fixed, 450).is_ok());
+  val bounded_router = bounded_builder.build();
+  expect(bounded_router.resolve(
+    "GET", http_routing.request_path(arr["a", "fixed"])
+  ).is_limit_exceeded());
+  expect(bounded_router.resolve(
+    "GET", http_routing.request_path(arr["a", "fixed", "extra"])
+  ).is_limit_exceeded());
+
+  // R04: trailing and repeated separators remain distinct decoded segments.
+  val trailing = older.resolve("GET", http_routing.request_path(arr["a", "fixed", ""]));
+  expect(trailing.handler_id == 103);
+  expect(older.capture(rt borrow trailing, "tail").unwrap().size() == 2);
+  val repeated = older.resolve("GET", http_routing.request_path(arr["a", "", "x"]));
+  expect(repeated.handler_id == 103);
+  expect(older.capture(rt borrow repeated, "tail").unwrap().at(0).unwrap() == "");
+
+  // R05: rejected registrations never change the already built snapshot.
+  expect(forward.get(rt borrow fixed, 999).is_err());
+  val ambiguous_param = http_routing.path("/a/{name}", arr[
+    http_routing.literal("a"), http_routing.param("name")
+  ]);
+  expect(forward.get(rt borrow ambiguous_param, 900).is_err());
+  val ambiguous_tail = http_routing.path("/a/*other", arr[
+    http_routing.literal("a"), http_routing.wildcard("other")
+  ]);
+  expect(forward.get(rt borrow ambiguous_tail, 901).is_err());
+  val repeated_capture = http_routing.path("/b/{id}/{id}", arr[
+    http_routing.literal("b"), http_routing.param("id"), http_routing.param("id")
+  ]);
+  expect(forward.get(rt borrow repeated_capture, 902).is_err());
+  expect(older.route_count() == 5);
+
+  // A different textual template for the same trie shape and method
+  // duplicates must fail before altering the registered endpoint.
+  val noncanonical = http_routing.path("/a/<id>", arr[
+    http_routing.literal("a"), http_routing.param("id")
+  ]);
+  expect(forward.get(rt borrow noncanonical, 903).is_err());
+  expect(forward.post(rt borrow parameter, 904).is_err());
+  expect(forward.get(rt borrow fixed, -1).is_err());
+  expect(forward.set_limits(1, 32).is_err());
+
+  // All rejected registrations leave the mutable builder's compiled
+  // routing behavior unchanged as well as the previously frozen snapshot.
+  val after_rejections = forward.build();
+  expect(after_rejections.route_count() == 5);
+  expect(after_rejections.resolve(
+    "GET", http_routing.request_path(arr["a", "fixed"])
+  ).handler_id == 101);
+
+  // R06: detach snapshot from later route/policy changes; retain captures.
+  // Decision owns a request-path copy and remains usable across rebuilds.
+  val old_decision = older.resolve("GET", http_routing.request_path(arr["a", "original"]));
+  expect(older.capture_one(rt borrow old_decision, "id").unwrap() == "original");
+
+  val later = http_routing.path("/later", arr[http_routing.literal("later")]);
+  expect(forward.get(rt borrow later, 120).is_ok());
+  forward.set_automatic_head(false);
+  forward.set_automatic_options(false);
+  val newer = forward.build();
+  expect(older.resolve("GET", http_routing.request_path(arr["later"])).is_not_found());
+  expect(other_order.resolve("GET", http_routing.request_path(arr["later"])).is_not_found());
+  expect(newer.resolve("GET", http_routing.request_path(arr["later"])).handler_id == 120);
+  expect(older.resolve("HEAD", http_routing.request_path(arr["a", "fixed"])).handler_id == 101);
+  expect(newer.resolve("HEAD", http_routing.request_path(arr["a", "fixed"])).is_method_not_allowed());
+  expect(older.resolve("OPTIONS", http_routing.request_path(arr["a", "fixed"])).is_automatic_options());
+  expect(newer.resolve("OPTIONS", http_routing.request_path(arr["a", "fixed"])).is_method_not_allowed());
+  expect(older.capture_one(rt borrow old_decision, "id").unwrap() == "original");
+
+  // R07: already-decoded adapter boundary; NEVER split or decode twice.
+  // Raw %2F -> segment "/", raw %252F -> segment "%2F".
+  // A literal "%GG" could come from valid raw "%25GG"; raw "%GG" MUST be
+  // rejected by the adapter before this router (not distinguishable here).
+  val escaped = http_routing.builder();
+  val slash_segment = http_routing.path("/esc/<slash>", arr[
+    http_routing.literal("esc"), http_routing.literal("/")
+  ]);
+  val percent_segment = http_routing.path("/esc/<percent-2F>", arr[
+    http_routing.literal("esc"), http_routing.literal("%2F")
+  ]);
+  val escaped_param = http_routing.path("/esc/{value}", arr[
+    http_routing.literal("esc"), http_routing.param("value")
+  ]);
+  expect(escaped.get(rt borrow slash_segment, 301).is_ok());
+  expect(escaped.get(rt borrow percent_segment, 302).is_ok());
+  expect(escaped.get(rt borrow escaped_param, 303).is_ok());
+  val escaped_router = escaped.build();
+  expect(escaped_router.resolve("GET", http_routing.request_path(arr["esc", "/"])).handler_id == 301);
+  expect(escaped_router.resolve("GET", http_routing.request_path(arr["esc", "%2F"])).handler_id == 302);
+  val encoded_twice = escaped_router.resolve("GET", http_routing.request_path(arr["esc", "%252F"]));
+  expect(encoded_twice.handler_id == 303);
+  expect(escaped_router.capture_one(rt borrow encoded_twice, "value").unwrap() == "%252F");
+  val percent_literal = escaped_router.resolve("GET", http_routing.request_path(arr["esc", "%GG"]));
+  expect(percent_literal.handler_id == 303);
+  expect(escaped_router.capture_one(rt borrow percent_literal, "value").unwrap() == "%GG");
+
+  // R08: unchecked request_path seam witness; request_path_checked rejects dot segments.\n  // The legacy request_path constructor still accepts ".." as
+  // opaque decoded data; the adapter/application must validate request targets.
+  val traversal_witness = escaped_router.resolve("GET", http_routing.request_path(arr["esc", ".."]));
+  expect(traversal_witness.handler_id == 303);
+  expect(escaped_router.capture_one(rt borrow traversal_witness, "value").unwrap() == "..");
+
+  // R09: PR #25 reconciliation. A Decision is not a transferable capability:
+  // an identical endpoint slot/template from a foreign router cannot read
+  // captures/Allow when the handler metadata differs.
+  val foreign_builder = http_routing.builder();
+  expect(foreign_builder.get(rt borrow fixed, 991).is_ok());
+  expect(foreign_builder.get(rt borrow parameter, 992).is_ok());
+  val foreign_router = foreign_builder.build();
+  val foreign_param = foreign_router.resolve(
+    "GET", http_routing.request_path(arr["a", "visitor"])
+  );
+  expect(foreign_param.endpoint_index == 1);
+  expect(older.capture_one(rt borrow foreign_param, "id").is_none());
+  expect(older.allow_count(rt borrow foreign_param) == 0);
+  expect(older.allow_method_at(rt borrow foreign_param, 0).is_none());
+
+  // Out-of-range generation index must fail closed, not throw.
+  val later_decision = newer.resolve(
+    "GET", http_routing.request_path(arr["later"])
+  );
+  expect(later_decision.endpoint_index == 5);
+  expect(older.capture_one(rt borrow later_decision, "id").is_none());
+  expect(older.allow_count(rt borrow later_decision) == 0);
+  expect(older.allow_method_at(rt borrow later_decision, 0).is_none());
+
+  // A legitimate decision from the producing immutable router still works.
+  val legitimate = older.resolve("GET", http_routing.request_path(arr["a", "visitor"]));
+  expect(older.capture_one(rt borrow legitimate, "id").unwrap() == "visitor");
+
+  // R10: reconcile PR #27. Empty decoded path segments must not be treated
+  // as named resource IDs. Literal-empty and wildcard edges remain valid.
+  expect(older.resolve("GET", http_routing.request_path(arr["a", ""])).handler_id == 103);
+  expect(other_order.resolve("GET", http_routing.request_path(arr["a", ""])).handler_id == 103);
+  expect(older.resolve("GET", http_routing.request_path(arr["a", "", "edit"])).handler_id == 103);
+
+  val required = http_routing.path("/required/{id}", arr[
+    http_routing.literal("required"), http_routing.param("id")
+  ]);
+  val required_tail = http_routing.path("/required/{id}/tail", arr[
+    http_routing.literal("required"), http_routing.param("id"), http_routing.literal("tail")
+  ]);
+  val literal_empty = http_routing.path("/required/", arr[
+    http_routing.literal("required"), http_routing.literal("")
+  ]);
+  val required_wildcard = http_routing.path("/required/*rest", arr[
+    http_routing.literal("required"), http_routing.wildcard("rest")
+  ]);
+
+  val required_builder = http_routing.builder();
+  expect(required_builder.get(rt borrow required, 601).is_ok());
+  expect(required_builder.get(rt borrow required_tail, 602).is_ok());
+  val param_only = required_builder.build();
+  expect(param_only.resolve(
+    "GET", http_routing.request_path(arr["required", ""])
+  ).is_not_found());
+  expect(param_only.resolve(
+    "GET", http_routing.request_path(arr["required", "", "tail"])
+  ).is_not_found());
+  expect(param_only.resolve(
+    "GET", http_routing.request_path(arr["required", "ok"])
+  ).handler_id == 601);
+
+  expect(required_builder.get(rt borrow literal_empty, 603).is_ok());
+  expect(required_builder.get(rt borrow required_wildcard, 604).is_ok());
+  val with_empty = required_builder.build();
+  expect(with_empty.resolve(
+    "GET", http_routing.request_path(arr["required", ""])
+  ).handler_id == 603);
+  expect(with_empty.resolve(
+    "GET", http_routing.request_path(arr["required", "", "tail"])
+  ).handler_id == 604);
+  expect(with_empty.resolve(
+    "GET", http_routing.request_path(arr["required", "ok", "tail"])
+  ).handler_id == 602);
+  expect(with_empty.resolve(
+    "POST", http_routing.request_path(arr["required", ""])
+  ).is_method_not_allowed());
+  return;
+}

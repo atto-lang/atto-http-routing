@@ -10,6 +10,12 @@ custom extension method. Matching is case-sensitive in the core.
 
 Do not silently rewrite an unknown method to GET.
 
+Registration admits only uppercase ASCII HTTP `tchar` tokens (such as `GET`
+and `M-SEARCH`), plus the existing `*` route wildcard. It rejects CR/LF,
+NUL, spaces, commas, colons, lowercase and non-ASCII before changing builder
+state. Methods can flow into `Allow`; adapters must separately validate raw
+ingress methods and outgoing header values.
+
 ## Path segmentation
 
 Split the request-target path on '/' before percent-decoding segment contents.
@@ -31,7 +37,9 @@ Canonical examples:
 - '/users/' -> ['users', '']
 - '/a//b' -> ['a', '', 'b']
 
-The router itself receives only the Array<String> of path segments.
+The router itself receives only the Array<String> of path segments. Named parameters never
+capture empty decoded segments; use an explicit `literal("")` or terminal
+wildcard for intentional empty segments.
 
 ## Validation before routing
 
@@ -77,3 +85,14 @@ A dispatcher must not send a Decision, PathCapture, or Router object to an
 isolated actor. Extract immutable scalar strings and place them in the actor's
 request capability before transferring it. Keep handler objects in the host
 adapter's registry; routing metadata contains only scalar IDs and operation names.
+
+## Optional checked decoded-segment constructor
+
+`http_routing.request_path_checked(segments)` is an additive guard for
+already split, already decoded segments. It rejects exact decoded `.` or `..`
+segments while preserving trailing empties, decoded slashes within their
+original segment, and percent-literal content without double decoding.
+
+This is **not** a raw URL parser, UTF-8/percent-decoder, control-char validator,
+or filesystem authorization check. Keep those gates in the adapter. The
+unchecked `request_path` constructor remains for compatibility.

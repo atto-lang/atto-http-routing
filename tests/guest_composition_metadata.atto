@@ -1,0 +1,27 @@
+import module http_routing from "../src/http_routing";
+
+pub routine main() -> void {
+  val prefix = http_routing.path("/api", arr[http_routing.literal("api")]);
+  val suffix = http_routing.path("/{item}", arr[http_routing.param("item")]);
+  val composed = prefix.concat("/api/{item}", rt borrow suffix);
+  stdio.println(composed.is_valid());
+  stdio.println(composed.size() == 2);
+  val b = http_routing.builder();
+  stdio.println(b.get(rt borrow composed, 101, 201, 301, "api.read").is_ok());
+  val original = b.build();
+  val match_one = original.resolve("GET", http_routing.request_path(arr["api", "book"]));
+  stdio.println(match_one.handler_id == 101);
+  stdio.println(match_one.pipeline_id == 201);
+  stdio.println(match_one.contract_id == 301);
+  stdio.println(match_one.operation_id == "api.read");
+  stdio.println(original.capture_one(rt borrow match_one, "item").unwrap() == "book");
+  stdio.println(match_one.path().size() == 2);
+  stdio.println(original.route_count() == 1);
+  stdio.println(original.resolve("GET", http_routing.request_path(arr["api", ""])).is_not_found());
+  val added = http_routing.path("/health", arr[http_routing.literal("health")]);
+  stdio.println(b.get(rt borrow added, 102).is_ok());
+  val rebuilt = b.build();
+  stdio.println(original.resolve("GET", http_routing.request_path(arr["health"])).is_not_found());
+  stdio.println(rebuilt.resolve("GET", http_routing.request_path(arr["health"])).handler_id == 102);
+  return;
+}

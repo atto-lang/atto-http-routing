@@ -1,164 +1,45 @@
-# oreslang-http-routing
+> **AI agent instructions (organization-wide):** Before working on code, issues, or pull requests, read and follow the [organization `AGENTS.md`](https://github.com/atto-lang/.github/blob/main/AGENTS.md), including its **merge-first stealth-development policy**. Honor any repository-local `AGENTS.md`, explicit holds, and GitHub-enforced rules.
 
-A native Oreslang HTTP routing library with a compiled segment trie, deterministic
-precedence, explicit HTTP method semantics, zero-copy path captures, and
-transport-neutral handler metadata.
+# atto-http-routing
 
-The router is intentionally **not** an HTTP server. Network listeners, HTTP/1.1
-or HTTP/2 parsing, percent-decoding, TLS, body streaming, and host capabilities
-belong in an adapter. This package owns the part that should be portable across
-Oreslang server hosts: route registration, route compilation, path matching,
-method dispatch, capture extraction, and routing metadata.
+Reusable HTTP routing abstractions and request dispatch for AttoLang applications.
 
-## Design influences
+## Naming migration and language authority
 
-The API combines the strongest ideas from modern routers without cloning any
-one framework:
+This repository is maintained at [atto-lang/atto-http-routing](https://github.com/atto-lang/atto-http-routing); use `https://github.com/atto-lang/atto-http-routing.git` for Git remotes and canonical `.atto` source examples. The normative language contract is [atto-spec](https://github.com/atto-lang/atto-spec), with executable guest evidence tracked by [atto-platform-conformance](https://github.com/atto-lang/atto-platform-conformance). Follow current ownership, borrowing, effects, actor, and syntax rules there; do not infer implemented features from a README or unexecuted CI.
 
-- Hono / Fastify / Chi / Roda: tree/trie dispatch instead of a flat route scan.
-- Axum: routing is separate from typed extraction and transport services.
-- Phoenix / Plug / Chi: middleware is composable metadata rather than hidden
-  global state.
-- Fastify / FastAPI / Elysia: routes carry schema/operation metadata suitable
-  for validation, generated clients, and OpenAPI.
-- Go net/http: HTTP method behavior is explicit and unsurprising.
+## Responsibilities
 
-The compiled router is a flat structure-of-arrays table. Registration uses a
-mutable builder; build produces a detached snapshot suitable for read-only
-sharing.
+Routing semantics, handler integration, HTTP actor compatibility, and request lifecycle.
 
-## Quick start
+## Design guidelines
 
-```ores
-import module http_routing from "src/http_routing";
+- Keep application-facing contracts separate from hosted Atto services.
+- Explicitly specify error, cancellation, concurrency, and resource-lifecycle behavior where applicable.
+- Document supported compiler backends, host restrictions, wire formats, and compatibility constraints.
 
-val routes = http_routing.builder();
+## Development and verification
 
-val show_user = http_routing.path("/users/{id}", arr[
-  http_routing.literal("users"),
-  http_routing.param("id")
-]);
+Use the source tree and CI for verified build/test commands. Tests should cover positive cases, invalid inputs, lifecycle behavior, and cross-backend interoperability where relevant.
 
-routes.get(
-  rt borrow show_user,
-  1001,          // handler_id
-  7,             // pipeline_id
-  42,            // contract_id
-  "users.show"   // operation_id
-).unwrap();
+## Status
 
-val router = routes.build();
+This README describes the project's intended role. It does not imply that the listed APIs or platforms are already implemented or supported.
 
-val decision = router.resolve(
-  "GET",
-  http_routing.request_path(arr["users", "abc123"])
-);
+## Related
 
-if decision.is_match(); do
-  val user_id = router.capture_one(rt borrow decision, "id").unwrap();
-  stdio.println(user_id);
-fi
-```
+- [AttoLang](https://github.com/atto-lang)
+- [Language specification](https://github.com/atto-lang/atto-spec)
+- [Platform conformance](https://github.com/atto-lang/atto-platform-conformance)
 
-Handlers, middleware pipelines, and contracts are opaque integer IDs by
-design. A server adapter resolves them after routing. That keeps host objects,
-VM internals, sockets, and actor implementation objects out of the routing
-table.
+## Repository ownership and contribution routing
 
-## Route patterns
+**Belongs here:** Reusable HTTP route matching/precedence, path decoding, method mismatch, handler integration and immutable route snapshots.
 
-Patterns are currently constructed from segments:
+**Belongs elsewhere:** Full servers in atto-api-server.atto or atto-demo-restful-server; front/reverse proxy demos in their separate example repos; cloud ingress in atto-co.
 
-- `literal("users")` — exact segment
-- `param("id")` — one named segment
-- `wildcard("rest")` — zero or more remaining segments; must be last
-- `root()` — root path
+**Security and portability boundary:** Reject ambiguous captures, traversal, malformed percent encodings and conflicting routes; protect borrow-only request views through asynchronous handler lifetimes.
 
-Matching precedence is **static > parameter > wildcard**, with bounded
-backtracking. A static branch that exists but dead-ends does not incorrectly
-hide a valid parameter route.
+AttoLang is the canonical project name; new source, examples and documentation use `.atto` and the `atto-lang` repository organization. This README defines scope, not feature readiness.
 
-Repeated capture names are rejected. Parameter/wildcard names that disagree at
-the same trie position are rejected, avoiding route-order-dependent capture
-semantics.
-
-### Why no string-template parser yet?
-
-The compiler stack pinned by `SOURCE_REF` has native Array storage but does
-not yet expose the general String splitting/slicing API that a pure-Oreslang
-template parser should depend on. Rather than smuggle Java interop into the
-router, the transport/build adapter supplies tokenized path segments.
-
-A later `path("/users/{id}")` parser can be layered over this same segment
-contract without changing the compiled router or match semantics.
-
-## HTTP behavior
-
-- Exact method wins.
-- `any(...)` registers `*` as an explicit catch-all method.
-- HEAD falls back to GET by default and sets `decision.suppress_body = true`.
-- Explicit HEAD overrides GET fallback.
-- OPTIONS is synthesized by default when no explicit OPTIONS/`*` target exists.
-- A matched path with an unsupported method returns method-not-allowed rather
-  than searching for a less-specific path.
-- `allow_count` / `allow_method_at` expose the Allow set, including
-  synthesized HEAD and OPTIONS.
-- Unknown paths are distinct from method-not-allowed.
-- Trailing/repeated slash semantics are strict because empty segments are
-  preserved by the adapter contract.
-
-## Safety and performance
-
-- No regex engine in the core matcher, so route matching has no regex-ReDoS
-  surface.
-- Request path length and total matcher steps are bounded.
-- Wildcards are terminal and captures are views over the existing RequestPath;
-  matching does not allocate parameter maps.
-- The built routing table is detached from RouterBuilder mutations.
-- The request-time structure is flat arrays rather than a graph of maps and
-  closures, which is friendly to cache locality and AOT.
-- No Java interop, filesystem access, sockets, reflection, or other ambient
-  authority is required by the routing core.
-
-See [docs/DESIGN.md](docs/DESIGN.md) and
-[docs/ADAPTER_CONTRACT.md](docs/ADAPTER_CONTRACT.md).
-
-## Testing
-
-This repository pins the compiler/runtime revision in `SOURCE_REF`.
-
-```bash
-ORESLANG_COMPILER=/path/to/oreslang-compiler bash scripts/test.sh
-```
-
-The suite covers precedence/backtracking, captures, wildcard behavior, 404/405,
-Allow synthesis, HEAD/OPTIONS semantics, metadata, strict slash behavior,
-builder snapshot isolation, duplicate/conflicting routes, and routing limits.
-
-The pinned compiler revision is the native-collections feature stack plus the mandatory module-`as` parser integration,
-so this library intentionally tracks that exact SHA rather than silently
-testing against an unrelated local Oreslang checkout.
-
-## 2026-10-06 compiler PR compatibility
-
-For the latest 10 upstream Oreslang compiler PRs, see [docs/compiler-pr-sync.md](docs/compiler-pr-sync.md). These features remain unmerged; this repo preserves its existing compiler reference and defaults until exact-SHA integration evidence is available.
-
-## Runner CI and native-suite coverage
-
-The `Test runner contracts` workflow uses a compiler test double to verify the
-working directory, exact arguments, check-before-run ordering, golden-output
-comparison, and failure propagation. It rejects floating SOURCE_REF values and
-dirty explicit compiler checkouts. Actions run with read-only permissions and
-no persisted credentials.
-
-The native suite now passes after migrating to explicit pattern/decision borrows,
-`borrow mut SearchBudget`, and mutable collection bindings. `resolve` owns its incoming
-path and constructs a detached path snapshot for the returned decision; captures
-remain views over that snapshot. `SOURCE_REF` pins the tested compiler/runtime.
-The golden output also includes the two boolean prints already present in the
-fixture (automatic-HEAD registration and rejecting an over-limit route).
-
-## Backend compatibility
-
-See [the compiler compatibility contract](docs/BACKENDS.md) for pinned Java/LLVM
-revisions, reproducible checks, and unsupported features.
+**Acceptance:** name exact source SHA/tree, runtime/toolchain, positive and negative checks and execution receipt before claiming support. Host-only tests and empty CI steps do not prove guest execution.

@@ -160,8 +160,7 @@ define module http_routing as
     }
   end
 
-  // Identity is per immutable router snapshot, not derived from route data.
-  // Never serialize, log or expose this witness as public authority.
+  // Private same-runtime snapshot identity, not an actor/supervisor capability.
   define class RouterGenerationWitness as
     val int marker;
   end
@@ -209,8 +208,7 @@ define module http_routing as
       return self.path_value;
     }
 
-    // The witness stays private to Decision; callers may compare only against
-    // a held Router snapshot witness. This is not an authorization grant.
+    // This is only an inspection fence. No runtime bearer authority is minted.
     pub from_generation(borrow RouterGenerationWitness expected) -> bool {
       return self.generation_witness is expected;
     }
@@ -296,6 +294,23 @@ define module http_routing as
     let bool automatic_options_value = true;
     let int max_segments_value = 128;
     let int max_match_steps_value = 4096;
+
+    // Registration-time guard. Only uppercase ASCII HTTP tchar tokens may
+    // flow into Allow; keep hot-path resolution allocation-free.
+    canonical_method(String method_value) -> bool {
+      if method_value == ""; then return false; fi
+      let String remaining = method_value;
+      for (const allowed of arr[
+        "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+        "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+        "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+        "!", "#", "$", "%", "&", "'", "*", "+", "-", ".", "^", "_",
+        "`", "|", "~"
+      ]) {
+        remaining = remaining.replace_literal(allowed, "");
+      }
+      return remaining == "";
+    }
 
     ensure_root(mut self)(): void {
       if self.nodes.size == 0; then
@@ -387,6 +402,9 @@ define module http_routing as
       if method_value == ""; then
         return Err("HTTP method must not be empty");
       fi
+      if !self.canonical_method(method_value); then
+        return Err("HTTP method must be a canonical uppercase HTTP token");
+      fi
       if handler_id < 0; then
         return Err("handler_id must be non-negative");
       fi
@@ -396,6 +414,49 @@ define module http_routing as
       if pattern.size() > self.max_segments_value; then
         return Err("route pattern exceeds max_segments");
       fi
+
+      // Validate ALL recoverable route conflicts without mutating builder state.
+      // Once an edge is missing, no descendant exists in the current trie.
+      // Snapshot the traversal index only; the commit phase below is unchanged.
+      let int existing_node_index = -1;
+      if self.nodes.size > 0; then
+        existing_node_index = 0;
+      fi
+
+      for (let int segment_index = 0; segment_index < pattern.size(); segment_index = segment_index + 1) {
+        if existing_node_index >= 0; then
+          val BuildNode existing = self.nodes.get(existing_node_index);
+          val PathSegment candidate = pattern.segment_at(segment_index);
+          if candidate.kind == 0; then
+            existing_node_index = existing.child_for_literal(candidate.value);
+          elif candidate.kind == 1; then
+            if existing.param_child >= 0 && existing.param_name != candidate.value; then
+              return Err("conflicting parameter name at the same route position");
+            fi
+            existing_node_index = existing.param_child;
+          else
+            if existing.wildcard_child >= 0 && existing.wildcard_name != candidate.value; then
+              return Err("conflicting wildcard name at the same route position");
+            fi
+            existing_node_index = existing.wildcard_child;
+          fi
+        fi
+      }
+
+      if existing_node_index >= 0; then
+        val BuildNode existing_leaf = self.nodes.get(existing_node_index);
+        if existing_leaf.endpoint_index >= 0; then
+          val BuildEndpoint existing_endpoint = self.endpoints.get(existing_leaf.endpoint_index);
+          if existing_endpoint.template() != pattern.template(); then
+            return Err("same route shape registered with a different canonical template");
+          fi
+          if existing_endpoint.find_method(method_value) >= 0; then
+            return Err("duplicate method for route");
+          fi
+        fi
+      fi
+
+      // Commit only after preflight. This does not guarantee atomicity on OOM.
 
       self.ensure_root();
       let int node_index = 0;
@@ -699,8 +760,7 @@ define module http_routing as
           target.operation_id,
           endpoint.template(),
           method_value == "HEAD",
-          request_path_value.copy(),
-          self.generation_witness
+          request_path_value.copy(), self.generation_witness
         );
       fi
 
@@ -715,8 +775,7 @@ define module http_routing as
           "",
           endpoint.template(),
           false,
-          request_path_value.copy(),
-          self.generation_witness
+          request_path_value.copy(), self.generation_witness
         );
       fi
 
@@ -730,15 +789,10 @@ define module http_routing as
         "",
         endpoint.template(),
         false,
-        request_path_value.copy(),
-        self.generation_witness
+        request_path_value.copy(), self.generation_witness
       );
     }
 
-    // Same-runtime object identity is only a snapshot inspection fence.
-    // A Decision remains public metadata, not a cross-actor, supervisor or
-    // cross-isolate bearer capability. The owner must fence retired generations
-    // at admission; an old Router can still inspect its own in-flight work.
     // Decisions can be carried between callers and routers. Never use the
     // public endpoint/target indexes as unvalidated array indexes; a decision
     // from a different route table must not authorize captures or Allow data.
@@ -771,9 +825,7 @@ define module http_routing as
     }
 
     decision_endpoint(borrow Decision decision) -> int {
-      // Reject foreign and replacement-snapshot Decisions before reading any
-      // endpoint index. The 'is' operator compares guest reference identity;
-      // equal route tables and identical IDs cannot forge the local witness.
+      // Reject foreign or replacement snapshots before inspecting public IDs.
       if !decision.from_generation(rt borrow self.generation_witness); then
         return -1;
       fi
@@ -810,7 +862,17 @@ define module http_routing as
           || target.operation_id != decision.operation_id; then
           return -1;
         fi
-      elif decision.kind != 2 && decision.kind != 3; then
+      elif decision.kind == 2 || decision.kind == 3; then
+        // 405 and automatic-OPTIONS are metadata-only decisions. They must
+        // never carry a route target, handler, pipeline or body-suppression
+        // flag. Defend against contradictory Decision metadata even when its
+        // snapshot witness is valid.
+        if decision.target_index != -1 || decision.handler_id != -1
+          || decision.pipeline_id != -1 || decision.contract_id != -1
+          || decision.operation_id != "" || decision.suppress_body; then
+          return -1;
+        fi
+      else
         return -1;
       fi
       return decision.endpoint_index;
@@ -934,6 +996,17 @@ define module http_routing as
 
   pub fnc root() -> PathPattern {
     return new PathPattern("/", new Array<PathSegment>());
+  }
+
+  // Only for already decoded segments. Reject traversal tokens without
+  // collapsing trailing empties, re-splitting decoded slashes or double decoding.
+  pub fnc request_path_checked(Array<String> segments) -> Result<RequestPath, String> {
+    for (const segment of segments) {
+      if segment == "." || segment == ".."; then
+        return Err("decoded dot segment rejected");
+      fi
+    }
+    return Ok(request_path(segments));
   }
 
   pub fnc request_path(Array<String> segments) -> RequestPath {

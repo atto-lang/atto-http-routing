@@ -7,41 +7,46 @@ trap 'rm -rf "$tmp"' EXIT
 project="$tmp/project with spaces"
 mkdir -p "$project/scripts" "$project/tests" "$tmp/bin"
 cp "$root/scripts/test.sh" "$project/scripts/test.sh"
-cp "$root/scripts/test-router-generation-authority.sh" "$project/scripts/test-router-generation-authority.sh"
 cp "$root/SOURCE_REF" "$project/SOURCE_REF"
 cp "$root/tests/expected.txt" "$project/tests/expected.txt"
 cp "$root/tests/router_semantics.atto" "$project/tests/router_semantics.atto"
-cp "$root/tests/router_generation_authority.expected.txt" "$project/tests/router_generation_authority.expected.txt"
-cp "$root/tests/router_generation_authority.atto" "$project/tests/router_generation_authority.atto"
+# Mirror the production runner's committed guest-fixture discovery.
+for fixture in "$root"/tests/guest_*.atto "$root"/tests/guest_*.expected; do
+  [[ -f "$fixture" ]] || continue
+  cp "$fixture" "$project/tests/"
+done
 cat > "$tmp/bin/compiler" <<'COMPILER'
 #!/usr/bin/env bash
 set -euo pipefail
 test "$PWD" = "$RUNNER_PROJECT"
-case "${@: -1}" in
+entry="${@: -1}"
+case "$entry" in
   "$RUNNER_PROJECT/tests/router_semantics.atto")
-    suite=normal
-    expected="$RUNNER_PROJECT/tests/expected.txt"
+    golden="$RUNNER_PROJECT/tests/expected.txt"
     ;;
-  "$RUNNER_PROJECT/tests/router_generation_authority.atto")
-    suite=authority
-    expected="$RUNNER_PROJECT/tests/router_generation_authority.expected.txt"
+  "$RUNNER_PROJECT/tests/guest_"*.atto)
+    golden="${entry%.atto}.expected"
+    [[ -f "$golden" ]] || { echo "missing guest golden" >&2; exit 65; }
     ;;
-  *) echo "Unexpected native entrypoint" >&2; exit 65;;
+  *)
+    echo "unexpected compiler fixture: $entry" >&2
+    exit 65
+    ;;
 esac
 if [[ "$1" = --check ]]; then
   test "$#" = 3
   test "$2" = --platform=server
-  echo "check-$suite" >> "$RUNNER_LOG"
+  echo check >> "$RUNNER_LOG"
   [[ "${RUNNER_CASE:-}" != check-failure ]] || exit 42
 else
   test "$#" = 2
   test "$1" = --platform=server
-  echo "run-$suite" >> "$RUNNER_LOG"
+  echo run >> "$RUNNER_LOG"
   [[ "${RUNNER_CASE:-}" != runtime-failure ]] || exit 43
   if [[ "${RUNNER_CASE:-}" = wrong-output ]]; then
     echo incorrect
   else
-    cat "$expected"
+    cat "$golden"
   fi
 fi
 COMPILER
@@ -63,7 +68,12 @@ git -C "$tmp/source" -c user.name=Runner -c user.email=runner@example.invalid co
 git -C "$tmp/source" rev-parse HEAD > "$project/SOURCE_REF"
 export ORESLANG_SOURCE_DIR="$tmp/source"
 bash "$project/scripts/test.sh"
-test "$(cat "$RUNNER_LOG")" = $'check-normal\nrun-normal\ncheck-authority\nrun-authority'
+expected_invocations=$'check\nrun'
+for fixture in "$project"/tests/guest_*.atto; do
+  [[ -f "$fixture" ]] || continue
+  expected_invocations+=$'\ncheck\nrun'
+done
+test "$(cat "$RUNNER_LOG")" = "$expected_invocations"
 for scenario in check-failure runtime-failure wrong-output; do
   : > "$RUNNER_LOG"
   if RUNNER_CASE="$scenario" bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
@@ -71,7 +81,7 @@ for scenario in check-failure runtime-failure wrong-output; do
     exit 1
   fi
   if [[ "$scenario" = check-failure ]]; then
-    test "$(cat "$RUNNER_LOG")" = check-normal
+    test "$(cat "$RUNNER_LOG")" = check
   fi
 done
 if ORESLANG_COMPILER="$tmp/missing" bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
@@ -105,4 +115,18 @@ if bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
 fi
 grep -q 'cannot inspect compiler checkout status' "$tmp/output"
 unset -f git
+# Broken symlinks are not regular files: even dangling fixture paths must fail.
+ln -s "$tmp/nowhere-source" "$project/tests/guest_dangling.atto"
+if bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
+  echo "dangling guest source accepted" >&2; exit 1
+fi
+grep -q 'guest source must not be a symlink' "$tmp/output"
+rm "$project/tests/guest_dangling.atto"
+ln -s "$tmp/nowhere-golden" "$project/tests/guest_dangling.expected"
+if bash "$project/scripts/test.sh" > "$tmp/output" 2>&1; then
+  echo "dangling guest golden accepted" >&2; exit 1
+fi
+grep -q 'orphan or symlinked guest golden' "$tmp/output"
+rm "$project/tests/guest_dangling.expected"
+bash "$project/scripts/test.sh"
 echo "runner contracts: PASS"

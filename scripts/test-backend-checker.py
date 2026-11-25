@@ -57,6 +57,25 @@ class BackendChecks(unittest.TestCase):
         for code,ir in [(1,valid),(-11,valid),(0,''),(0,'define i64 @main() { ret i64 42 }')]:
             with self.subTest(code=code,ir=ir), self.assertRaises(RuntimeError):
                 checker.check_positive(subprocess.CompletedProcess([],code,ir,'failure'))
+    def test_positive_control_rejects_spoofed_ir_and_stderr(self):
+        valid = 'define i32 @main() {\n ret i32 42\n}\n'
+        rejected = [
+            '; ' + valid,
+            'declare i32 @main()\n',
+            'define i32 @main()\n',
+            'define i32 @main() ; no body\n',
+            'define i32 @main() {\n',
+            'define i32 @main() {\n}\n',
+            valid + valid,
+            'define i32 @main() {\n}\n' + valid,
+        ]
+        for ir in rejected:
+            with self.subTest(ir=ir), self.assertRaises(RuntimeError):
+                checker.check_positive(subprocess.CompletedProcess([], 0, ir, ''))
+        with self.assertRaises(RuntimeError):
+            checker.check_positive(subprocess.CompletedProcess([], 0, valid, 'warning'))
+        checker.check_positive(subprocess.CompletedProcess([], 0, valid, ''))
+
     def test_empty_probes_rejected(self):
         self.contract['llvm']['rejection_probes'] = []
         with self.assertRaises(RuntimeError): self.load()
@@ -148,5 +167,33 @@ class BoundedAggregateBudget(unittest.TestCase):
                 with patch.object(checker.subprocess, 'Popen', side_effect=AssertionError('should not spawn')):
                     with self.assertRaises(ValueError):
                         checker.run_bounded([sys.executable, '-c', 'print(1)'], **options)
+
+
+class ExactRejectionOutputEvidence(unittest.TestCase):
+    """LLVm expected rejection must be exactly one line, not strip-normalized."""
+
+    def test_exact_diagnostic_and_one_final_newline_remain_valid(self):
+        probe={'path':'probe.ores', 'diagnostic':'oreslang-llvmc: expected fnc at byte 0'}
+        for output in (probe['diagnostic'],probe['diagnostic']+'\n'):
+            checker.check_rejection(subprocess.CompletedProcess([],1,'',output),probe)
+
+    def test_whitespace_stdout_cannot_hide_behind_strip(self):
+        probe={'path':'probe.ores', 'diagnostic':'oreslang-llvmc: expected fnc at byte 0'}
+        for stdout in (' ', '\n', '\t', ' \n', 'nonempty'):
+            with self.subTest(stdout=stdout), self.assertRaises(RuntimeError):
+                checker.check_rejection(subprocess.CompletedProcess([],1,stdout,probe['diagnostic']),probe)
+
+    def test_padded_or_multiline_stderr_is_not_exact_diagnostic(self):
+        probe={'path':'probe.ores', 'diagnostic':'oreslang-llvmc: expected fnc at byte 0'}
+        for stderr in (
+            ' '+probe['diagnostic'],
+            '\n'+probe['diagnostic'],
+            probe['diagnostic']+'  ',
+            probe['diagnostic']+'\n\n',
+            probe['diagnostic']+'\r\n',
+            '\t'+probe['diagnostic']+'\n'
+        ):
+            with self.subTest(stderr=repr(stderr)), self.assertRaises(RuntimeError):
+                checker.check_rejection(subprocess.CompletedProcess([],1,'',stderr),probe)
 
 if __name__ == '__main__': unittest.main()
