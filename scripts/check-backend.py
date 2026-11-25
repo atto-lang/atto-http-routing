@@ -10,6 +10,13 @@ import tempfile
 from bounded_process import run_bounded
 
 ROOT = Path(__file__).resolve().parents[1]
+# Known LLVM fail-closed boundaries. Newer compilers name the rejected file.
+_AT = r' at byte [0-9]+(?: \[file: [A-Za-z0-9_.-]+\.(?:atto|ores)\])?'
+UNSUPPORTED_BOUNDARIES = (
+    r'oreslang-llvmc: final class field requires declaration-site initializer' + _AT,
+    r"oreslang-llvmc: scalar local requires an explicit ': int' or ': bool' type" + _AT,
+    r'oreslang-llvmc: native branch-local class owner requires destructor/drop lowering' + _AT,
+)
 
 def git(directory, *args):
     return subprocess.check_output(['git', '-C', str(directory), *args], text=True).strip()
@@ -62,17 +69,29 @@ def load_contract():
             raise RuntimeError('Duplicate LLVM rejection probe')
         seen.add(path)
         diagnostic = probe['diagnostic']
-        if not isinstance(diagnostic, str) or '\n' in diagnostic or not (diagnostic.startswith('oreslang-llvmc: expected ') or re.fullmatch(r'oreslang-llvmc: final class field requires declaration-site initializer at byte [0-9]+', diagnostic)):
+        if not isinstance(diagnostic, str) or '\n' in diagnostic or not (diagnostic.startswith('oreslang-llvmc: expected ') or any(re.fullmatch(boundary, diagnostic) for boundary in UNSUPPORTED_BOUNDARIES)):
             raise RuntimeError('Expected a specific unsupported-syntax diagnostic')
     return contract
 
 def check_rejection(result, probe):
-    if result.returncode != 1 or result.stdout.strip() or result.stderr.strip() != probe['diagnostic']:
+    if (result.returncode != 1 or result.stdout != '' or
+            result.stderr not in (probe['diagnostic'], probe['diagnostic'] + '\n')):
         raise RuntimeError(f"Unexpected rejection result for {probe['path']}: exit={result.returncode}\n{result.stderr}")
 
 def check_positive(result):
-    if result.returncode or not re.search(r'^define i32 @main\(\)', result.stdout, re.MULTILINE):
-        raise RuntimeError('LLVM positive control failed; rejection is not evidence of compatibility: ' + result.stderr)
+    # Header plus non-empty, complete body: not a full LLVM verifier.
+    if result.returncode != 0 or result.stderr != '':
+        raise RuntimeError('LLVM positive control failed: exit/stderr mismatch')
+    headers = list(re.finditer(
+        r'(?m)^define[ \t]+i32[ \t]+@main\(\)(?:[ \t]+[^{}\r\n]*)?[ \t]*\{[ \t]*(?:;[^\n]*)?$',
+        result.stdout
+    ))
+    if len(headers) != 1:
+        raise RuntimeError('LLVM positive control failed: missing/duplicate main definition')
+    body = result.stdout[headers[0].end():]
+    closing = re.search(r'(?m)^}[ \t]*(?:;[^\n]*)?$', body)
+    if closing is None or not body[:closing.start()].strip():
+        raise RuntimeError('LLVM positive control failed: missing or empty main body')
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

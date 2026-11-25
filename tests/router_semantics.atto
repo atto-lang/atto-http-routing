@@ -1,0 +1,314 @@
+import module http_routing from "../src/http_routing";
+
+fnc ok(Result<bool, String> result) -> void {
+  stdio.println(result.is_ok());
+  return;
+}
+
+pub routine main() -> void {
+  val router_builder = http_routing.builder();
+
+  val root = http_routing.root();
+  val users_new = http_routing.path("/users/new", arr[
+    http_routing.literal("users"),
+    http_routing.literal("new")
+  ]);
+  val users_new_details = http_routing.path("/users/new/details", arr[
+    http_routing.literal("users"),
+    http_routing.literal("new"),
+    http_routing.literal("details")
+  ]);
+  val users_edit = http_routing.path("/users/{id}/edit", arr[
+    http_routing.literal("users"),
+    http_routing.param("id"),
+    http_routing.literal("edit")
+  ]);
+  val assets = http_routing.path("/assets/*rest", arr[
+    http_routing.literal("assets"),
+    http_routing.wildcard("rest")
+  ]);
+  val slash_strict = http_routing.path("/slash/", arr[
+    http_routing.literal("slash"),
+    http_routing.literal("")
+  ]);
+  val health = http_routing.path("/health", arr[
+    http_routing.literal("health")
+  ]);
+  val any_path = http_routing.path("/any", arr[
+    http_routing.literal("any")
+  ]);
+
+  ok(router_builder.get(rt borrow root, 1));
+  ok(router_builder.get(rt borrow users_new, 2));
+  ok(router_builder.get(rt borrow users_new_details, 3));
+  ok(router_builder.get(rt borrow users_edit, 4, 40, 400, "users.edit"));
+  ok(router_builder.get(rt borrow assets, 5));
+  ok(router_builder.get(rt borrow slash_strict, 6));
+  ok(router_builder.get(rt borrow health, 7));
+  ok(router_builder.post(rt borrow health, 8));
+  ok(router_builder.head(rt borrow health, 9));
+  ok(router_builder.any(rt borrow any_path, 10));
+
+  val router = router_builder.build();
+
+  val root_match = router.resolve("GET", http_routing.request_path(new Array<String>()));
+  stdio.println(root_match.is_match());
+  stdio.println(root_match.handler_id);
+
+  val static_match = router.resolve("GET", http_routing.request_path(arr["users", "new"]));
+  stdio.println(static_match.handler_id);
+
+  // A dead-end static branch must backtrack to the parameter branch.
+  val fallback_match = router.resolve("GET", http_routing.request_path(arr["users", "new", "edit"]));
+  stdio.println(fallback_match.handler_id);
+  stdio.println(router.capture_one(rt borrow fallback_match, "id").unwrap());
+  stdio.println(fallback_match.pipeline_id);
+  stdio.println(fallback_match.contract_id);
+  stdio.println(fallback_match.operation_id);
+
+  val wildcard_match = router.resolve(
+    "GET",
+    http_routing.request_path(arr["assets", "css", "main.css"])
+  );
+  stdio.println(wildcard_match.handler_id);
+  val rest = router.capture(rt borrow wildcard_match, "rest").unwrap();
+  stdio.println(rest.size());
+  stdio.println(rest.at(0).unwrap());
+  stdio.println(rest.at(1).unwrap());
+
+  val empty_wildcard = router.resolve("GET", http_routing.request_path(arr["assets"]));
+  stdio.println(empty_wildcard.is_match());
+  stdio.println(router.capture(rt borrow empty_wildcard, "rest").unwrap().size());
+
+  val missing = router.resolve("GET", http_routing.request_path(arr["missing"]));
+  stdio.println(missing.is_not_found());
+
+  val wrong_method = router.resolve("DELETE", http_routing.request_path(arr["health"]));
+  stdio.println(wrong_method.is_method_not_allowed());
+  stdio.println(router.allow_count(rt borrow wrong_method));
+  stdio.println(router.allow_method_at(rt borrow wrong_method, 0).unwrap());
+  stdio.println(router.allow_method_at(rt borrow wrong_method, 1).unwrap());
+  stdio.println(router.allow_method_at(rt borrow wrong_method, 2).unwrap());
+  stdio.println(router.allow_method_at(rt borrow wrong_method, 3).unwrap());
+
+  val head_match = router.resolve("HEAD", http_routing.request_path(arr["health"]));
+  stdio.println(head_match.handler_id);
+  stdio.println(head_match.suppress_body);
+
+  val auto_head_builder = http_routing.builder();
+  ok(auto_head_builder.get(rt borrow users_new, 20));
+  val auto_head_router = auto_head_builder.build();
+  val auto_head = auto_head_router.resolve("HEAD", http_routing.request_path(arr["users", "new"]));
+  stdio.println(auto_head.handler_id);
+  stdio.println(auto_head.suppress_body);
+
+  val automatic_options = router.resolve("OPTIONS", http_routing.request_path(arr["users", "new"]));
+  stdio.println(automatic_options.is_automatic_options());
+
+  val any_match = router.resolve("BREW", http_routing.request_path(arr["any"]));
+  stdio.println(any_match.handler_id);
+
+  stdio.println(router.resolve("GET", http_routing.request_path(arr["slash"])).is_not_found());
+  stdio.println(router.resolve("GET", http_routing.request_path(arr["slash", ""])).handler_id);
+
+  // Build snapshots are immutable: registrations after build do not alter old routers.
+  val later = http_routing.path("/later", arr[http_routing.literal("later")]);
+  ok(router_builder.get(rt borrow later, 11));
+  val router_after = router_builder.build();
+  stdio.println(router.resolve("GET", http_routing.request_path(arr["later"])).is_not_found());
+  stdio.println(router_after.resolve("GET", http_routing.request_path(arr["later"])).handler_id);
+
+  val duplicate = router_builder.get(rt borrow users_new, 99);
+  stdio.println(duplicate.is_err());
+
+  val conflicting_param = http_routing.path("/users/{name}/edit", arr[
+    http_routing.literal("users"),
+    http_routing.param("name"),
+    http_routing.literal("edit")
+  ]);
+  stdio.println(router_builder.get(rt borrow conflicting_param, 100).is_err());
+
+  val bad_wildcard = http_routing.path("/bad/*rest/tail", arr[
+    http_routing.literal("bad"),
+    http_routing.wildcard("rest"),
+    http_routing.literal("tail")
+  ]);
+  stdio.println(router_builder.get(rt borrow bad_wildcard, 101).is_err());
+
+  val duplicate_capture = http_routing.path("/pair/{id}/{id}", arr[
+    http_routing.literal("pair"),
+    http_routing.param("id"),
+    http_routing.param("id")
+  ]);
+  stdio.println(router_builder.get(rt borrow duplicate_capture, 102).is_err());
+
+  val limited_builder = http_routing.builder();
+  ok(limited_builder.set_limits(2, 32));
+  ok(limited_builder.get(rt borrow users_new, 200));
+  val limited_router = limited_builder.build();
+  stdio.println(
+    limited_router.resolve(
+      "GET",
+      http_routing.request_path(arr["users", "new", "extra"])
+    ).is_limit_exceeded()
+  );
+  stdio.println(limited_builder.get(rt borrow users_edit, 201).is_err());
+
+  // Blank named segments are not legal matches; a literal empty route
+  // segment remains a separate, intentionally registered route shape.
+  stdio.println(router.resolve(
+    "GET", http_routing.request_path(arr["users", "", "edit"])
+  ).is_not_found());
+
+  // A decision belongs to the table that produced it, even if the other
+  // table has the same route template and an overlapping endpoint index.
+  val foreign_builder = http_routing.builder();
+  ok(foreign_builder.get(rt borrow root, 999));
+  val foreign_router = foreign_builder.build();
+  val foreign_decision = foreign_router.resolve(
+    "GET", http_routing.request_path(new Array<String>())
+  );
+  stdio.println(router.allow_count(rt borrow foreign_decision));
+  stdio.println(router.allow_method_at(rt borrow foreign_decision, 0).is_none());
+  stdio.println(router.capture(rt borrow foreign_decision, "id").is_none());
+
+  // Deliberately misleading canonical template and handler ID: a different
+  // route shape cannot authorize this router's root Allow list.
+  val deceptive_builder = http_routing.builder();
+  val deceptive_root = http_routing.path("/", arr[http_routing.literal("foreign")]);
+  ok(deceptive_builder.get(rt borrow deceptive_root, 1));
+  val deceptive_router = deceptive_builder.build();
+  val deceptive_decision = deceptive_router.resolve(
+    "GET", http_routing.request_path(arr["foreign"])
+  );
+  stdio.println(router.allow_count(rt borrow deceptive_decision));
+  stdio.println(router.allow_method_at(rt borrow deceptive_decision, 0).is_none());
+
+  // Same template/target IDs, but a different literal path. Reject both
+  // parameter capture and Allow access for the foreign router's decision.
+  val capture_builder = http_routing.builder();
+  val capture_route = http_routing.path("/users/{id}", arr[
+    http_routing.literal("users"), http_routing.param("id")
+  ]);
+  ok(capture_builder.get(rt borrow capture_route, 700));
+  val capture_router = capture_builder.build();
+  val deceptive_capture_builder = http_routing.builder();
+  val deceptive_capture_route = http_routing.path("/users/{id}", arr[
+    http_routing.literal("foreign"), http_routing.param("id")
+  ]);
+  ok(deceptive_capture_builder.get(rt borrow deceptive_capture_route, 700));
+  val deceptive_capture_router = deceptive_capture_builder.build();
+  val deceptive_capture_decision = deceptive_capture_router.resolve(
+    "GET", http_routing.request_path(arr["foreign", "secret"])
+  );
+  stdio.println(capture_router.capture_one(rt borrow deceptive_capture_decision, "id").is_none());
+  stdio.println(capture_router.allow_count(rt borrow deceptive_capture_decision));
+
+
+  // Adversarial winning-route replay: both routers expose the same parameter
+  // endpoint at index 0 with identical target metadata, and the foreign
+  // decision's path matches that endpoint's shape. The receiving router has
+  // a more-specific literal winner, so only bounded local replay rejects it.
+  val winner_builder = http_routing.builder();
+  ok(winner_builder.get(rt borrow capture_route, 700));
+  val winner_literal = http_routing.path("/users/admin", arr[
+    http_routing.literal("users"), http_routing.literal("admin")
+  ]);
+  ok(winner_builder.get(rt borrow winner_literal, 701));
+  val winner_router = winner_builder.build();
+
+  val param_only_builder = http_routing.builder();
+  ok(param_only_builder.get(rt borrow capture_route, 700));
+  val param_only_router = param_only_builder.build();
+  val param_only_decision = param_only_router.resolve(
+    "GET", http_routing.request_path(arr["users", "admin"])
+  );
+  stdio.println(winner_router.resolve(
+    "GET", http_routing.request_path(arr["users", "admin"])
+  ).handler_id);
+  stdio.println(param_only_decision.handler_id);
+  stdio.println(winner_router.capture_one(rt borrow param_only_decision, "id").is_none());
+  stdio.println(winner_router.allow_count(rt borrow param_only_decision));
+  stdio.println(winner_router.allow_method_at(rt borrow param_only_decision, 0).is_none());
+
+
+  // Method registration must never poison the HTTP Allow response.
+  val method_builder = http_routing.builder();
+  stdio.println(method_builder.route("M-SEARCH", rt borrow health, 300).is_ok());
+  stdio.println(method_builder.route("GET\r\nX-Injected: true", rt borrow health, 301).is_err());
+  stdio.println(method_builder.route("GET, POST", rt borrow health, 302).is_err());
+  stdio.println(method_builder.route("GET POST", rt borrow health, 303).is_err());
+  stdio.println(method_builder.route("GET\t", rt borrow health, 304).is_err());
+  stdio.println(method_builder.route("GET\u0000", rt borrow health, 305).is_err());
+  stdio.println(method_builder.route("GET:", rt borrow health, 306).is_err());
+  stdio.println(method_builder.route("get", rt borrow health, 307).is_err());
+  stdio.println(method_builder.route("GÉT", rt borrow health, 308).is_err());
+  val method_router = method_builder.build();
+  stdio.println(method_router.resolve(
+    "M-SEARCH", http_routing.request_path(arr["health"])
+  ).handler_id == 300);
+  val method_rejected_decision = method_router.resolve(
+    "POST", http_routing.request_path(arr["health"])
+  );
+  stdio.println(method_router.allow_count(rt borrow method_rejected_decision) == 2);
+
+  // Checked decoded-segment admission: do not double-decode or re-split slashes.
+  stdio.println(http_routing.request_path_checked(arr["docs", "."]).is_err());
+  stdio.println(http_routing.request_path_checked(arr["docs", ".."]).is_err());
+  stdio.println(http_routing.request_path_checked(arr["docs", "a/b"]).is_ok());
+  stdio.println(http_routing.request_path_checked(arr["docs", ""]).is_ok());
+  stdio.println(http_routing.request_path_checked(arr["%2E%2E"]).is_ok());
+
+  // Empty decoded segments cannot be captured by a named parameter.
+  // Explicit empty literals and terminal wildcards remain routeable.
+  val required = http_routing.path("/required/{id}", arr[
+    http_routing.literal("required"), http_routing.param("id")
+  ]);
+  val required_tail = http_routing.path("/required/{id}/tail", arr[
+    http_routing.literal("required"), http_routing.param("id"), http_routing.literal("tail")
+  ]);
+  val explicit_slash = http_routing.path("/required/", arr[
+    http_routing.literal("required"), http_routing.literal("")
+  ]);
+  val strict_builder = http_routing.builder();
+  ok(strict_builder.get(rt borrow required, 301));
+  ok(strict_builder.get(rt borrow required_tail, 302));
+  ok(strict_builder.get(rt borrow explicit_slash, 303));
+  val strict_router = strict_builder.build();
+  stdio.println(strict_router.resolve(
+    "GET", http_routing.request_path(arr["required", "value"])
+  ).handler_id == 301);
+  stdio.println(strict_router.resolve(
+    "GET", http_routing.request_path(arr["required", ""])
+  ).handler_id == 303);
+  stdio.println(strict_router.resolve(
+    "GET", http_routing.request_path(arr["required", "", "tail"])
+  ).is_not_found());
+  stdio.println(strict_router.resolve(
+    "GET", http_routing.request_path(arr["required", "value", "tail"])
+  ).handler_id == 302);
+  stdio.println(strict_router.resolve(
+    "GET", http_routing.request_path(arr["required"])
+  ).is_not_found());
+  val only_parameter_builder = http_routing.builder();
+  ok(only_parameter_builder.get(rt borrow required, 401));
+  val only_parameter_router = only_parameter_builder.build();
+  stdio.println(only_parameter_router.resolve(
+    "GET", http_routing.request_path(arr["required", ""])
+  ).is_not_found());
+  val wildcard_required = http_routing.path("/required/*rest", arr[
+    http_routing.literal("required"), http_routing.wildcard("rest")
+  ]);
+  val wildcard_builder = http_routing.builder();
+  ok(wildcard_builder.get(rt borrow required, 501));
+  ok(wildcard_builder.get(rt borrow wildcard_required, 502));
+  val wildcard_router = wildcard_builder.build();
+  stdio.println(wildcard_router.resolve(
+    "GET", http_routing.request_path(arr["required", ""])
+  ).handler_id == 502);
+  stdio.println(wildcard_router.resolve(
+    "GET", http_routing.request_path(arr["required", "value"])
+  ).handler_id == 501);
+
+  return;
+}

@@ -10,6 +10,12 @@ custom extension method. Matching is case-sensitive in the core.
 
 Do not silently rewrite an unknown method to GET.
 
+Registration admits only uppercase ASCII HTTP `tchar` tokens (such as `GET`
+and `M-SEARCH`), plus the existing `*` route wildcard. It rejects CR/LF,
+NUL, spaces, commas, colons, lowercase and non-ASCII before changing builder
+state. Methods can flow into `Allow`; adapters must separately validate raw
+ingress methods and outgoing header values.
+
 ## Path segmentation
 
 Split the request-target path on '/' before percent-decoding segment contents.
@@ -31,26 +37,16 @@ Canonical examples:
 - '/users/' -> ['users', '']
 - '/a//b' -> ['a', '', 'b']
 
-The router itself receives only the Array<String> of path segments. Empty segments remain
-significant: named `param(...)` edges require a non-empty segment, whereas
-`literal("")` and terminal wildcards may match empty segments.
+The router itself receives only the Array<String> of path segments. Named parameters never
+capture empty decoded segments; use an explicit `literal("")` or terminal
+wildcard for intentional empty segments.
 
 ## Validation before routing
 
-A production adapter MUST reject malformed percent escapes, NUL/control
-characters, invalid request-target encodings and traversal-ambiguous dot
-segments (including percent-encoded variants) **before** constructing
-RequestPath. Backslash and mixed-separator handling must be explicit rather
-than platform dependent. Preserve decoded slash bytes inside one segment; do
-not normalize or re-split them. A decoded segment such as `%GG` may be the
-valid result of raw `%25GG`, so the router cannot infer malformed raw input.
-Rejecting literal `.`/`..` in any filesystem-backed route may also require
-application-specific authorization and normalization policy.
-
-The pure router intentionally does not validate raw request-targets: a
-`request_path(arr["a", ".."])` value can be captured as-is. Adapters must
-not treat successful route matching as validation or authorization. See
-[issue #22's boundary matrix](ISSUE_22_ACCEPTANCE.md).
+A production adapter should reject malformed percent escapes, NUL/control
+characters, and invalid request-target encodings before constructing
+RequestPath. Backslash handling should be explicit rather than platform
+dependent.
 
 The router's max_segments and max_match_steps limits are a second defensive
 boundary, not a substitute for protocol parsing limits.
@@ -90,12 +86,13 @@ isolated actor. Extract immutable scalar strings and place them in the actor's
 request capability before transferring it. Keep handler objects in the host
 adapter's registry; routing metadata contains only scalar IDs and operation names.
 
-## Decision provenance and generation scope
+## Optional checked decoded-segment constructor
 
-A `Decision` is not a capability or unforgeable generation ID. Inspector
-methods validate endpoint range, route template, path shape and associated
-target metadata before returning captures or Allow entries. These checks
-protect against accidental stale/foreign decisions with inconsistent metadata.
-They do **not** authorize dispatch or prove snapshot identity. Always keep the
-producing router generation attached to the in-flight request and resolve
-handler authorization from its generation-scoped registry.
+`http_routing.request_path_checked(segments)` is an additive guard for
+already split, already decoded segments. It rejects exact decoded `.` or `..`
+segments while preserving trailing empties, decoded slashes within their
+original segment, and percent-literal content without double decoding.
+
+This is **not** a raw URL parser, UTF-8/percent-decoder, control-char validator,
+or filesystem authorization check. Keep those gates in the adapter. The
+unchecked `request_path` constructor remains for compatibility.

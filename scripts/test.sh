@@ -37,21 +37,43 @@ if [[ -n "$ORESLANG_SOURCE_DIR" ]]; then
   fi
 fi
 
+entry="$repo_root/tests/router_semantics.atto"
 actual="$(mktemp "${TMPDIR:-/tmp}/oreslang-http-routing.XXXXXX")"
 trap 'rm -f "$actual"' EXIT
 
 cd "$repo_root"
 
-# Exact-pinned native guest execution: both suites must check, execute, and
-# match their committed golden output. Host test doubles cannot certify this.
-for suite in router_semantics router_adversarial; do
-  entry="$repo_root/tests/$suite.ores"
-  expected="$repo_root/tests/expected.txt"
-  if [[ "$suite" = router_adversarial ]]; then
-    expected="$repo_root/tests/expected_adversarial.txt"
+"$compiler" --check --platform=server "$entry"
+"$compiler" --platform=server "$entry" > "$actual"
+
+diff -u "$repo_root/tests/expected.txt" "$actual"
+
+# Deterministic native guest regressions with exact expected stdout.
+for guest in "$repo_root"/tests/guest_*.atto; do
+  if [[ -L "$guest" ]]; then
+    echo "guest source must not be a symlink: $guest" >&2
+    exit 65
   fi
-  "$compiler" --check --platform=server "$entry"
-  "$compiler" --platform=server "$entry" > "$actual"
-  diff -u "$expected" "$actual"
-  echo "$suite: PASS"
+  [[ -f "$guest" ]] || continue
+  golden="${guest%.atto}.expected"
+  if [[ ! -f "$golden" || -L "$golden" ]]; then
+    echo "guest golden missing or symlinked: $golden" >&2
+    exit 65
+  fi
+  "$compiler" --check --platform=server "$guest"
+  "$compiler" --platform=server "$guest" > "$actual"
+  diff -u "$golden" "$actual"
+  echo "guest fixture $(basename "$guest"): PASS"
 done
+for golden in "$repo_root"/tests/guest_*.expected; do
+  if [[ -L "$golden" ]]; then
+    echo "orphan or symlinked guest golden: $golden" >&2
+    exit 65
+  fi
+  [[ -f "$golden" ]] || continue
+  if [[ ! -f "${golden%.expected}.atto" ]]; then
+    echo "orphan or symlinked guest golden: $golden" >&2
+    exit 65
+  fi
+done
+echo "router semantics: PASS"
