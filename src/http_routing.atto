@@ -47,13 +47,43 @@ define module http_routing as
         fi
 
         if segment.kind == 1 || segment.kind == 2; then
-          if segment.value == ""; then
+          if segment.value eq ""; then
+            return false;
+          fi
+
+          // Capture names are registration metadata, not URL contents.
+          // Reject invalid names before any mutable trie construction. Keep
+          // ASCII snake_case to avoid ambiguous keys between adapters.
+          // This is a character-set gate; the full 64-byte bound awaits a
+          // portable String byte-length contract on every Atto backend.
+          let bool starts_lowercase = false;
+          for (const first of arr[
+            "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
+            "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"
+          ]) {
+            if segment.value.starts_with(first); then
+              starts_lowercase = true;
+            fi
+          }
+          if !starts_lowercase; then
+            return false;
+          fi
+
+          let String remaining = segment.value;
+          for (const allowed of arr[
+            "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
+            "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
+            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "_"
+          ]) {
+            remaining = remaining.replace_literal(allowed, "");
+          }
+          if remaining neq ""; then
             return false;
           fi
 
           for (let int earlier = 0; earlier < index; earlier = earlier + 1) {
             val PathSegment previous = self.segments_value.get(earlier);
-            if (previous.kind == 1 || previous.kind == 2) && previous.value == segment.value; then
+            if (previous.kind == 1 || previous.kind == 2) && previous.value eq segment.value; then
               return false;
             fi
           }
@@ -70,7 +100,7 @@ define module http_routing as
     // Scope/group composition stays explicit because current Oreslang does not
     // yet expose a general String concatenation/splitting standard-library
     // contract. The caller supplies the canonical combined route template.
-    pub concat(String combined_template, borrow PathPattern suffix) -> PathPattern {
+    pub concat(String combined_template, PathPattern suffix) -> PathPattern {
       let mut Array<PathSegment> combined = new Array<PathSegment>();
 
       for (const segment of self.segments_value) {
@@ -171,6 +201,7 @@ define module http_routing as
   // 2 = method not allowed
   // 3 = automatic OPTIONS
   // 4 = routing limit exceeded
+  // 5 = invalid request method
   define class Decision as
     pub val int kind;
     pub val int endpoint_index;
@@ -204,12 +235,16 @@ define module http_routing as
       return self.kind == 4;
     }
 
+    pub is_invalid_method() -> bool {
+      return self.kind == 5;
+    }
+
     pub path() -> RequestPath {
       return self.path_value;
     }
 
     // This is only an inspection fence. No runtime bearer authority is minted.
-    pub from_generation(borrow RouterGenerationWitness expected) -> bool {
+    pub from_generation(RouterGenerationWitness expected) -> bool {
       return self.generation_witness is expected;
     }
   end
@@ -228,7 +263,7 @@ define module http_routing as
 
     pub child_for_literal(String literal_value) -> int {
       for (let int index = 0; index < self.static_names.size; index = index + 1) {
-        if self.static_names.get(index) == literal_value; then
+        if self.static_names.get(index) eq literal_value; then
           return self.static_children.get(index);
         fi
       }
@@ -256,7 +291,7 @@ define module http_routing as
 
     pub find_method(String method_value) -> int {
       for (let int index = 0; index < self.targets_value.size; index = index + 1) {
-        if self.targets_value.get(index).method == method_value; then
+        if self.targets_value.get(index).method eq method_value; then
           return index;
         fi
       }
@@ -298,7 +333,7 @@ define module http_routing as
     // Registration-time guard. Only uppercase ASCII HTTP tchar tokens may
     // flow into Allow; keep hot-path resolution allocation-free.
     canonical_method(String method_value) -> bool {
-      if method_value == ""; then return false; fi
+      if method_value eq ""; then return false; fi
       let String remaining = method_value;
       for (const allowed of arr[
         "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
@@ -309,7 +344,7 @@ define module http_routing as
       ]) {
         remaining = remaining.replace_literal(allowed, "");
       }
-      return remaining == "";
+      return remaining eq "";
     }
 
     ensure_root(mut self)(): void {
@@ -341,6 +376,14 @@ define module http_routing as
       if max_match_steps <= 0; then
         return Err("max_match_steps must be positive");
       fi
+      // Absolute admission ceilings: caller-configured limits may be stricter
+      // but cannot disable bounded validation and bounded trie backtracking.
+      if max_segments > 128; then
+        return Err("max_segments exceeds hard cap of 128");
+      fi
+      if max_match_steps > 16384; then
+        return Err("max_match_steps exceeds hard cap of 16384");
+      fi
       for (const endpoint of self.endpoints) {
         if endpoint.size() > max_segments; then
           return Err("max_segments is smaller than an already registered route");
@@ -355,7 +398,7 @@ define module http_routing as
     // Returns the child node for one pattern segment, creating it when
     // absent: -1 for a conflicting parameter name, -2 for a conflicting
     // wildcard name at the same position.
-    advance(mut self)(int node_index, borrow PathSegment segment) -> int {
+    advance(mut self)(int node_index, PathSegment segment) -> int {
       let mut BuildNode current = self.nodes.get(node_index);
       if segment.kind == 0; then
         let int child_index = current.child_for_literal(segment.value);
@@ -369,7 +412,7 @@ define module http_routing as
         if current.param_child < 0; then
           current.param_child = self.new_node();
           current.param_name = segment.value;
-        elif current.param_name != segment.value; then
+        elif current.param_name neq segment.value; then
           return -1;
         fi
         return current.param_child;
@@ -377,7 +420,7 @@ define module http_routing as
       if current.wildcard_child < 0; then
         current.wildcard_child = self.new_node();
         current.wildcard_name = segment.value;
-      elif current.wildcard_name != segment.value; then
+      elif current.wildcard_name neq segment.value; then
         return -2;
       fi
       return current.wildcard_child;
@@ -385,7 +428,7 @@ define module http_routing as
 
     pub route(mut self)(
       String method_value,
-      borrow PathPattern pattern,
+      PathPattern pattern,
       int handler_id
     ) -> Result<bool, String> {
       return self.route(method_value, pattern, handler_id, -1, -1, "");
@@ -393,13 +436,13 @@ define module http_routing as
 
     pub route(mut self)(
       String method_value,
-      borrow PathPattern pattern,
+      PathPattern pattern,
       int handler_id,
       int pipeline_id,
       int contract_id,
       String operation_id
     ) -> Result<bool, String> {
-      if method_value == ""; then
+      if method_value eq ""; then
         return Err("HTTP method must not be empty");
       fi
       if !self.canonical_method(method_value); then
@@ -408,11 +451,14 @@ define module http_routing as
       if handler_id < 0; then
         return Err("handler_id must be non-negative");
       fi
-      if !pattern.is_valid(); then
-        return Err("invalid route pattern");
-      fi
+      // Apply the cheap absolute bound BEFORE PathPattern.is_valid()'s
+      // duplicate-name scan; malformed giant patterns must not force an
+      // unbounded quadratic registration preflight.
       if pattern.size() > self.max_segments_value; then
         return Err("route pattern exceeds max_segments");
+      fi
+      if !pattern.is_valid(); then
+        return Err("invalid route pattern");
       fi
 
       // Validate ALL recoverable route conflicts without mutating builder state.
@@ -430,12 +476,12 @@ define module http_routing as
           if candidate.kind == 0; then
             existing_node_index = existing.child_for_literal(candidate.value);
           elif candidate.kind == 1; then
-            if existing.param_child >= 0 && existing.param_name != candidate.value; then
+            if existing.param_child >= 0 && existing.param_name neq candidate.value; then
               return Err("conflicting parameter name at the same route position");
             fi
             existing_node_index = existing.param_child;
           else
-            if existing.wildcard_child >= 0 && existing.wildcard_name != candidate.value; then
+            if existing.wildcard_child >= 0 && existing.wildcard_name neq candidate.value; then
               return Err("conflicting wildcard name at the same route position");
             fi
             existing_node_index = existing.wildcard_child;
@@ -447,7 +493,7 @@ define module http_routing as
         val BuildNode existing_leaf = self.nodes.get(existing_node_index);
         if existing_leaf.endpoint_index >= 0; then
           val BuildEndpoint existing_endpoint = self.endpoints.get(existing_leaf.endpoint_index);
-          if existing_endpoint.template() != pattern.template(); then
+          if existing_endpoint.template() neq pattern.template(); then
             return Err("same route shape registered with a different canonical template");
           fi
           if existing_endpoint.find_method(method_value) >= 0; then
@@ -463,7 +509,7 @@ define module http_routing as
 
       for (let int segment_index = 0; segment_index < pattern.size(); segment_index = segment_index + 1) {
         val PathSegment segment = pattern.segment_at(segment_index);
-        node_index = self.advance(node_index, rt borrow segment);
+        node_index = self.advance(node_index, segment);
         if node_index == -1; then
           return Err("conflicting parameter name at the same route position");
         fi
@@ -479,7 +525,7 @@ define module http_routing as
         leaf.endpoint_index = self.endpoints.size - 1;
       else
         val BuildEndpoint existing_endpoint = self.endpoints.get(leaf.endpoint_index);
-        if existing_endpoint.template() != pattern.template(); then
+        if existing_endpoint.template() neq pattern.template(); then
           return Err("same route shape registered with a different canonical template");
         fi
       fi
@@ -500,12 +546,12 @@ define module http_routing as
       return Ok(true);
     }
 
-    pub get(mut self)(borrow PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub get(mut self)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("GET", pattern, handler_id);
     }
 
     pub get(mut self)(
-      borrow PathPattern pattern,
+      PathPattern pattern,
       int handler_id,
       int pipeline_id,
       int contract_id,
@@ -514,12 +560,12 @@ define module http_routing as
       return self.route("GET", pattern, handler_id, pipeline_id, contract_id, operation_id);
     }
 
-    pub post(mut self)(borrow PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub post(mut self)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("POST", pattern, handler_id);
     }
 
     pub post(mut self)(
-      borrow PathPattern pattern,
+      PathPattern pattern,
       int handler_id,
       int pipeline_id,
       int contract_id,
@@ -528,27 +574,27 @@ define module http_routing as
       return self.route("POST", pattern, handler_id, pipeline_id, contract_id, operation_id);
     }
 
-    pub put(mut self)(borrow PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub put(mut self)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("PUT", pattern, handler_id);
     }
 
-    pub patch(mut self)(borrow PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub patch(mut self)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("PATCH", pattern, handler_id);
     }
 
-    pub delete(mut self)(borrow PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub delete(mut self)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("DELETE", pattern, handler_id);
     }
 
-    pub head(mut self)(borrow PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub head(mut self)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("HEAD", pattern, handler_id);
     }
 
-    pub options(mut self)(borrow PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub options(mut self)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("OPTIONS", pattern, handler_id);
     }
 
-    pub any(mut self)(borrow PathPattern pattern, int handler_id) -> Result<bool, String> {
+    pub any(mut self)(PathPattern pattern, int handler_id) -> Result<bool, String> {
       return self.route("*", pattern, handler_id);
     }
 
@@ -614,13 +660,28 @@ define module http_routing as
     val int max_match_steps_value;
     val RouterGenerationWitness generation_witness;
 
+    canonical_method(String method_value) -> bool {
+      if method_value eq ""; then return false; fi
+      let String remaining = method_value;
+      for (const allowed of arr[
+        "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+        "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+        "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+        "!", "#", "$", "%", "&", "'", "*", "+", "-", ".", "^", "_",
+        "`", "|", "~"
+      ]) {
+        remaining = remaining.replace_literal(allowed, "");
+      }
+      return remaining eq "";
+    }
+
     static_child(int node_index, String segment) -> int {
       val int start = self.node_static_start.get(node_index);
       val int count = self.node_static_count.get(node_index);
 
       for (let int offset = 0; offset < count; offset = offset + 1) {
         val int edge_index = start + offset;
-        if self.static_literals.get(edge_index) == segment; then
+        if self.static_literals.get(edge_index) eq segment; then
           return self.static_children.get(edge_index);
         fi
       }
@@ -631,8 +692,8 @@ define module http_routing as
     match_node(
       int node_index,
       int segment_index,
-      borrow RequestPath request_path_value,
-      borrow mut SearchBudget budget
+      RequestPath request_path_value,
+      mut SearchBudget budget
     ) -> int {
       if budget.remaining <= 0; then
         return -2;
@@ -671,7 +732,7 @@ define module http_routing as
       val int parameter_child = self.node_param_child.get(node_index);
       // Named parameters are nonempty. Do not let a blank decoded segment
       // silently select a protected resource or an authorization fallback.
-      if parameter_child >= 0 && current_segment != ""; then
+      if parameter_child >= 0 && current_segment neq ""; then
         val int parameter_match = self.match_node(
           parameter_child,
           segment_index + 1,
@@ -696,22 +757,22 @@ define module http_routing as
       return -1;
     }
 
-    target_for_method(borrow Endpoint endpoint, String method_value) -> int {
+    target_for_method(Endpoint endpoint, String method_value) -> int {
       for (let int index = 0; index < endpoint.target_count(); index = index + 1) {
-        if endpoint.target_at(index).method == method_value; then
+        if endpoint.target_at(index).method eq method_value; then
           return index;
         fi
       }
 
       for (let int index = 0; index < endpoint.target_count(); index = index + 1) {
-        if endpoint.target_at(index).method == "*"; then
+        if endpoint.target_at(index).method eq "*"; then
           return index;
         fi
       }
 
-      if method_value == "HEAD" && self.automatic_head_value; then
+      if method_value eq "HEAD" && self.automatic_head_value; then
         for (let int index = 0; index < endpoint.target_count(); index = index + 1) {
-          if endpoint.target_at(index).method == "GET"; then
+          if endpoint.target_at(index).method eq "GET"; then
             return index;
           fi
         }
@@ -720,9 +781,9 @@ define module http_routing as
       return -1;
     }
 
-    has_method(borrow Endpoint endpoint, String method_value) -> bool {
+    has_method(Endpoint endpoint, String method_value) -> bool {
       for (let int index = 0; index < endpoint.target_count(); index = index + 1) {
-        if endpoint.target_at(index).method == method_value; then
+        if endpoint.target_at(index).method eq method_value; then
           return true;
         fi
       }
@@ -731,14 +792,19 @@ define module http_routing as
 
     pub resolve(String method_value, RequestPath request_path_value) -> Decision {
       if request_path_value.size() > self.max_segments_value; then
-        return new Decision(4, -1, -1, -1, -1, -1, "", "", false, request_path_value.copy(), self.generation_witness);
+        return new Decision(4, -1, -1, -1, -1, -1, "", "", false, new RequestPath(new Array<String>()), self.generation_witness);
+      fi
+
+      // Reject malformed method tokens before trie lookup, including any(*) routes.
+      if !self.canonical_method(method_value); then
+        return new Decision(5, -1, -1, -1, -1, -1, "", "", false, new RequestPath(new Array<String>()), self.generation_witness);
       fi
 
       let mut SearchBudget budget = new SearchBudget(self.max_match_steps_value);
-      val int endpoint_index = self.match_node(0, 0, rt borrow request_path_value, rt mut borrow budget);
+      val int endpoint_index = self.match_node(0, 0, request_path_value, mut budget);
 
       if endpoint_index == -2; then
-        return new Decision(4, -1, -1, -1, -1, -1, "", "", false, request_path_value.copy(), self.generation_witness);
+        return new Decision(4, -1, -1, -1, -1, -1, "", "", false, new RequestPath(new Array<String>()), self.generation_witness);
       fi
 
       if endpoint_index < 0; then
@@ -746,7 +812,7 @@ define module http_routing as
       fi
 
       val Endpoint endpoint = self.endpoints.get(endpoint_index);
-      val int target_index = self.target_for_method(rt borrow endpoint, method_value);
+      val int target_index = self.target_for_method(endpoint, method_value);
 
       if target_index >= 0; then
         val RouteTarget target = endpoint.target_at(target_index);
@@ -759,12 +825,12 @@ define module http_routing as
           target.contract_id,
           target.operation_id,
           endpoint.template(),
-          method_value == "HEAD",
+          method_value eq "HEAD",
           request_path_value.copy(), self.generation_witness
         );
       fi
 
-      if method_value == "OPTIONS" && self.automatic_options_value; then
+      if method_value eq "OPTIONS" && self.automatic_options_value; then
         return new Decision(
           3,
           endpoint_index,
@@ -800,7 +866,7 @@ define module http_routing as
     // same segment shape. Check the request snapshot against this endpoint
     // before permitting capture or Allow inspection; do not trust a foreign
     // Decision's public endpoint index or route_template as authority.
-    decision_path_matches(borrow Endpoint endpoint, borrow RequestPath path_value) -> bool {
+    decision_path_matches(Endpoint endpoint, RequestPath path_value) -> bool {
       val PathPattern pattern = endpoint.pattern();
       if path_value.size() > self.max_segments_value; then
         return false;
@@ -814,30 +880,30 @@ define module http_routing as
           return false;
         fi
         val String actual = path_value.segment_at(index);
-        if segment.kind == 0 && actual != segment.value; then
+        if segment.kind == 0 && actual neq segment.value; then
           return false;
         fi
-        if segment.kind == 1 && actual == ""; then
+        if segment.kind == 1 && actual eq ""; then
           return false;
         fi
       }
       return path_value.size() == pattern.size();
     }
 
-    decision_endpoint(borrow Decision decision) -> int {
+    decision_endpoint(Decision decision) -> int {
       // Reject foreign or replacement snapshots before inspecting public IDs.
-      if !decision.from_generation(rt borrow self.generation_witness); then
+      if !decision.from_generation(self.generation_witness); then
         return -1;
       fi
       if decision.endpoint_index < 0 || decision.endpoint_index >= self.endpoints.size; then
         return -1;
       fi
       val Endpoint endpoint = self.endpoints.get(decision.endpoint_index);
-      if decision.route_template != endpoint.template(); then
+      if decision.route_template neq endpoint.template(); then
         return -1;
       fi
       val RequestPath verified_path = decision.path();
-      if !self.decision_path_matches(rt borrow endpoint, rt borrow verified_path); then
+      if !self.decision_path_matches(endpoint, verified_path); then
         return -1;
       fi
       // A plausible path shape is not enough when this table contains a
@@ -846,7 +912,7 @@ define module http_routing as
       // the same winner; a decision never selects its own endpoint.
       let mut SearchBudget replay_budget = new SearchBudget(self.max_match_steps_value);
       val int winner = self.match_node(
-        0, 0, rt borrow verified_path, rt mut borrow replay_budget
+        0, 0, verified_path, mut replay_budget
       );
       if winner != decision.endpoint_index; then
         return -1;
@@ -859,7 +925,7 @@ define module http_routing as
         if target.handler_id != decision.handler_id
           || target.pipeline_id != decision.pipeline_id
           || target.contract_id != decision.contract_id
-          || target.operation_id != decision.operation_id; then
+          || target.operation_id neq decision.operation_id; then
           return -1;
         fi
       elif decision.kind == 2 || decision.kind == 3; then
@@ -869,7 +935,7 @@ define module http_routing as
         // snapshot witness is valid.
         if decision.target_index != -1 || decision.handler_id != -1
           || decision.pipeline_id != -1 || decision.contract_id != -1
-          || decision.operation_id != "" || decision.suppress_body; then
+          || decision.operation_id neq "" || decision.suppress_body; then
           return -1;
         fi
       else
@@ -878,8 +944,8 @@ define module http_routing as
       return decision.endpoint_index;
     }
 
-    pub capture(borrow Decision decision, String name) -> Option<PathCapture> {
-      let int accepted_index = self.decision_endpoint(rt borrow decision);
+    pub capture(Decision decision, String name) -> Option<PathCapture> {
+      let int accepted_index = self.decision_endpoint(decision);
       if accepted_index < 0; then
         return None;
       fi
@@ -893,12 +959,12 @@ define module http_routing as
         if segment.kind == 0; then
           request_index = request_index + 1;
         elif segment.kind == 1; then
-          if segment.value == name; then
+          if segment.value eq name; then
             return Some(new PathCapture(decision.path(), request_index, 1));
           fi
           request_index = request_index + 1;
         else
-          if segment.value == name; then
+          if segment.value eq name; then
             return Some(new PathCapture(
               decision.path(),
               request_index,
@@ -912,7 +978,7 @@ define module http_routing as
       return None;
     }
 
-    pub capture_one(borrow Decision decision, String name) -> Option<String> {
+    pub capture_one(Decision decision, String name) -> Option<String> {
       val Option<PathCapture> captured = self.capture(decision, name);
       if captured.is_none(); then
         return None;
@@ -920,8 +986,8 @@ define module http_routing as
       return captured.unwrap().one();
     }
 
-    pub allow_count(borrow Decision decision) -> int {
-      let int accepted_index = self.decision_endpoint(rt borrow decision);
+    pub allow_count(Decision decision) -> int {
+      let int accepted_index = self.decision_endpoint(decision);
       if accepted_index < 0; then
         return 0;
       fi
@@ -929,19 +995,19 @@ define module http_routing as
       val Endpoint endpoint = self.endpoints.get(accepted_index);
       let int count = endpoint.target_count();
 
-      if self.automatic_head_value && self.has_method(rt borrow endpoint, "GET") && !self.has_method(rt borrow endpoint, "HEAD"); then
+      if self.automatic_head_value && self.has_method(endpoint, "GET") && !self.has_method(endpoint, "HEAD"); then
         count = count + 1;
       fi
 
-      if self.automatic_options_value && !self.has_method(rt borrow endpoint, "OPTIONS"); then
+      if self.automatic_options_value && !self.has_method(endpoint, "OPTIONS"); then
         count = count + 1;
       fi
 
       return count;
     }
 
-    pub allow_method_at(borrow Decision decision, int requested_index) -> Option<String> {
-      let int accepted_index = self.decision_endpoint(rt borrow decision);
+    pub allow_method_at(Decision decision, int requested_index) -> Option<String> {
+      let int accepted_index = self.decision_endpoint(decision);
       if accepted_index < 0 || requested_index < 0; then
         return None;
       fi
@@ -953,14 +1019,14 @@ define module http_routing as
 
       let int synthetic_index = endpoint.target_count();
 
-      if self.automatic_head_value && self.has_method(rt borrow endpoint, "GET") && !self.has_method(rt borrow endpoint, "HEAD"); then
+      if self.automatic_head_value && self.has_method(endpoint, "GET") && !self.has_method(endpoint, "HEAD"); then
         if requested_index == synthetic_index; then
           return Some("HEAD");
         fi
         synthetic_index = synthetic_index + 1;
       fi
 
-      if self.automatic_options_value && !self.has_method(rt borrow endpoint, "OPTIONS"); then
+      if self.automatic_options_value && !self.has_method(endpoint, "OPTIONS"); then
         if requested_index == synthetic_index; then
           return Some("OPTIONS");
         fi
@@ -1001,8 +1067,11 @@ define module http_routing as
   // Only for already decoded segments. Reject traversal tokens without
   // collapsing trailing empties, re-splitting decoded slashes or double decoding.
   pub fnc request_path_checked(Array<String> segments) -> Result<RequestPath, String> {
+    if segments.size > 128; then
+      return Err("decoded segment count exceeds hard cap of 128");
+    fi
     for (const segment of segments) {
-      if segment == "." || segment == ".."; then
+      if segment eq "." || segment eq ".."; then
         return Err("decoded dot segment rejected");
       fi
     }
