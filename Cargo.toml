@@ -1,0 +1,9 @@
+[package]
+name = "atto-http-routing-contract-tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[test]]
+name = "router_contract"
+path = "tests/router_contract.rs"

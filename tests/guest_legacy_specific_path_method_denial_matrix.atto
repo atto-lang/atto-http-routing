@@ -1,0 +1,43 @@
+import module http_routing from "../src/http_routing";
+
+// Method mismatch on a specific literal path must not fall through to a
+// parameter route, while genuine longer paths may use a wildcard fallback.
+pub routine main() -> void {
+  val builder = http_routing.builder();
+  val literal = http_routing.path("/items/new", arr[
+    http_routing.literal("items"), http_routing.literal("new")
+  ]);
+  val parameter = http_routing.path("/items/{id}", arr[
+    http_routing.literal("items"), http_routing.param("id")
+  ]);
+  val wildcard = http_routing.path("/items/*rest", arr[
+    http_routing.literal("items"), http_routing.wildcard("rest")
+  ]);
+  stdio.println(builder.get(literal, 7).is_ok());
+  stdio.println(builder.post(parameter, 8).is_ok());
+  stdio.println(builder.get(wildcard, 9).is_ok());
+  val router = builder.build();
+
+  val exact = router.resolve("GET", http_routing.request_path(arr["items","new"]));
+  stdio.println(exact.is_match());
+  stdio.println(exact.handler_id == 7);
+  val denied = router.resolve("POST", http_routing.request_path(arr["items","new"]));
+  stdio.println(denied.is_method_not_allowed());
+  stdio.println(router.allow_count(denied) == 3);
+  stdio.println(router.allow_method_at(denied, 0).unwrap() eq "GET");
+
+  val post = router.resolve("POST", http_routing.request_path(arr["items","42"]));
+  stdio.println(post.is_match());
+  stdio.println(post.handler_id == 8);
+  stdio.println(router.capture_one(post, "id").unwrap() eq "42");
+
+  val longer = router.resolve("GET", http_routing.request_path(arr["items","new","extra"]));
+  stdio.println(longer.is_match());
+  stdio.println(longer.handler_id == 9);
+  val rest = router.capture(longer, "rest").unwrap();
+  stdio.println(rest.size() == 2);
+  stdio.println(rest.at(0).unwrap() eq "new");
+  stdio.println(rest.at(1).unwrap() eq "extra");
+  stdio.println(router.capture_one(longer, "rest").is_none());
+  return;
+}

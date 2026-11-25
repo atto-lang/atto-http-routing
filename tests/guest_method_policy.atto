@@ -5,14 +5,14 @@ pub routine main() -> void {
   val b = http_routing.builder();
   b.set_automatic_head(false);
   b.set_automatic_options(false);
-  stdio.println(b.get(rt borrow p, 71).is_ok());
+  stdio.println(b.get(p, 71).is_ok());
   val off = b.build();
   stdio.println(off.resolve("HEAD", http_routing.request_path(arr["policy"])).is_method_not_allowed());
   stdio.println(off.resolve("OPTIONS", http_routing.request_path(arr["policy"])).is_method_not_allowed());
   val denied = off.resolve("DELETE", http_routing.request_path(arr["policy"]));
-  stdio.println(off.allow_count(rt borrow denied) == 1);
-  stdio.println(off.allow_method_at(rt borrow denied, 0).unwrap() == "GET");
-  stdio.println(off.allow_method_at(rt borrow denied, 1).is_none());
+  stdio.println(off.allow_count(denied) == 1);
+  stdio.println(off.allow_method_at(denied, 0).unwrap() eq "GET");
+  stdio.println(off.allow_method_at(denied, 1).is_none());
   b.set_automatic_head(true);
   b.set_automatic_options(true);
   val enabled = b.build();
@@ -21,14 +21,14 @@ pub routine main() -> void {
   stdio.println(head_fallback.suppress_body);
   stdio.println(enabled.resolve("OPTIONS", http_routing.request_path(arr["policy"])).is_automatic_options());
   val enabled_denied = enabled.resolve("DELETE", http_routing.request_path(arr["policy"]));
-  stdio.println(enabled.allow_count(rt borrow enabled_denied) == 3);
-  stdio.println(b.head(rt borrow p, 72).is_ok());
-  stdio.println(b.options(rt borrow p, 73).is_ok());
+  stdio.println(enabled.allow_count(enabled_denied) == 3);
+  stdio.println(b.head(p, 72).is_ok());
+  stdio.println(b.options(p, 73).is_ok());
   val explicit = b.build();
   stdio.println(explicit.resolve("HEAD", http_routing.request_path(arr["policy"])).handler_id == 72);
   stdio.println(explicit.resolve("OPTIONS", http_routing.request_path(arr["policy"])).handler_id == 73);
   stdio.println(explicit.resolve("OPTIONS", http_routing.request_path(arr["policy"])).is_match());
   val explicit_denied = explicit.resolve("DELETE", http_routing.request_path(arr["policy"]));
-  stdio.println(explicit.allow_count(rt borrow explicit_denied) == 3);
+  stdio.println(explicit.allow_count(explicit_denied) == 3);
   return;
 }

@@ -1,0 +1,40 @@
+import module http_routing from "../src/http_routing";
+
+// Method collisions, illegal handler IDs, and capture shape conflicts reject.
+pub routine main() -> void {
+  val b = http_routing.builder();
+  val path = http_routing.path("/item/{id}", arr[
+    http_routing.literal("item"),
+    http_routing.param("id")
+  ]);
+  stdio.println(b.get(path, 88).is_ok());
+  stdio.println(b.get(path, 89).is_err());
+  stdio.println(b.post(path, 90).is_ok());
+  stdio.println(b.post(path, 91).is_err());
+  stdio.println(b.get(path, -1).is_err());
+  val conflicting = http_routing.path("/item/{other}", arr[
+    http_routing.literal("item"),
+    http_routing.param("other")
+  ]);
+  stdio.println(b.get(conflicting, 92).is_err());
+
+  val repeated = http_routing.path("/x/{id}/{id}", arr[
+    http_routing.literal("x"),
+    http_routing.param("id"),
+    http_routing.param("id")
+  ]);
+  stdio.println(b.get(repeated, 93).is_err());
+  val nonterminal = http_routing.path("/x/*tail/y", arr[
+    http_routing.literal("x"),
+    http_routing.wildcard("tail"),
+    http_routing.literal("y")
+  ]);
+  stdio.println(b.get(nonterminal, 94).is_err());
+
+  val router = b.build();
+  stdio.println(router.route_count() == 1);
+  stdio.println(router.resolve("GET", http_routing.request_path(arr["item","42"])).handler_id == 88);
+  stdio.println(router.resolve("POST", http_routing.request_path(arr["item","42"])).handler_id == 90);
+  stdio.println(router.resolve("DELETE", http_routing.request_path(arr["item","42"])).is_method_not_allowed());
+  return;
+}
