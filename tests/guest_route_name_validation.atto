@@ -1,0 +1,83 @@
+import module http_routing from "../src/http_routing";
+
+// Guest conformance: malformed route captures are rejected transactionally;
+// request-time invalid method tokens must not reach an any("*") handler.
+pub routine main() -> void {
+  val builder = http_routing.builder();
+  // Caller settings cannot override the absolute worst-case work caps.
+  stdio.println(builder.set_limits(129, 4096).is_err());
+  stdio.println(builder.set_limits(128, 16385).is_err());
+  val good = http_routing.path("/users/{user_id1}", arr[
+    http_routing.literal("users"), http_routing.param("user_id1")
+  ]);
+  stdio.println(builder.get(good, 101).is_ok());
+
+  val bad_upper = http_routing.path("/bad/{Bad}", arr[
+    http_routing.literal("bad"), http_routing.param("Bad")
+  ]);
+  stdio.println(builder.get(bad_upper, 201).is_err());
+
+  val bad_digit = http_routing.path("/bad/{9id}", arr[
+    http_routing.literal("bad"), http_routing.param("9id")
+  ]);
+  stdio.println(builder.get(bad_digit, 202).is_err());
+
+  val bad_underscore = http_routing.path("/bad/{_id}", arr[
+    http_routing.literal("bad"), http_routing.param("_id")
+  ]);
+  stdio.println(builder.get(bad_underscore, 203).is_err());
+
+  val bad_hyphen = http_routing.path("/bad/{user-id}", arr[
+    http_routing.literal("bad"), http_routing.param("user-id")
+  ]);
+  stdio.println(builder.get(bad_hyphen, 204).is_err());
+
+  val bad_unicode = http_routing.path("/bad/{café}", arr[
+    http_routing.literal("bad"), http_routing.param("café")
+  ]);
+  stdio.println(builder.get(bad_unicode, 205).is_err());
+
+  val bad_wildcard = http_routing.path("/files/*Bad", arr[
+    http_routing.literal("files"), http_routing.wildcard("Bad")
+  ]);
+  stdio.println(builder.get(bad_wildcard, 206).is_err());
+
+  // Failed registrations must not mutate the builder or snapshots.
+  stdio.println(builder.build().route_count() == 1);
+
+  val any_method = http_routing.path("/any", arr[http_routing.literal("any")]);
+  stdio.println(builder.any(any_method, 99).is_ok());
+  val router = builder.build();
+  stdio.println(router.resolve(
+    "GET", http_routing.request_path(arr["any"])
+  ).handler_id == 99);
+  stdio.println(router.resolve(
+    "GET\nInjected", http_routing.request_path(arr["any"])
+  ).is_invalid_method());
+  stdio.println(router.resolve(
+    "get", http_routing.request_path(arr["any"])
+  ).is_invalid_method());
+  stdio.println(router.resolve(
+    "", http_routing.request_path(arr["any"])
+  ).is_invalid_method());
+  stdio.println(router.resolve(
+    "GET/POST", http_routing.request_path(arr["any"])
+  ).is_invalid_method());
+  stdio.println(router.resolve(
+    "M-SEARCH", http_routing.request_path(arr["any"])
+  ).handler_id == 99);
+  stdio.println(router.resolve(
+    "GET", http_routing.request_path(arr["users", "123"])
+  ).handler_id == 101);
+
+  // The checked constructor is a defensive boundary for already-decoded
+  // segments, NOT a percent-decoder or raw HTTP parser.
+  stdio.println(http_routing.request_path_checked(arr["users", ".."]).is_err());
+  stdio.println(http_routing.request_path_checked(arr["users", "."]).is_err());
+  let mut Array<String> segments = new Array<String>();
+  for (let int index = 0; index < 129; index = index + 1) {
+    segments.add("x");
+  }
+  stdio.println(http_routing.request_path_checked(segments).is_err());
+  return;
+}
